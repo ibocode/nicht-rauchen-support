@@ -120,14 +120,7 @@
         }
       ],
       "expo-audio",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "useFrameworks": "static"
-          }
-        }
-      ],
+      "expo-build-properties",
       "expo-video",
       "expo-asset",
       [
