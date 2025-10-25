@@ -29,8 +29,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
-          "background-processing",
-          "background-fetch"
+          "remote-notification"
         ],
         "NSUserNotificationsUsageDescription": "Diese App sendet tägliche Erinnerungen um 18:00 Uhr, um dich an deinen Check-in zu erinnern (nur wenn du noch nicht eingecheckt hast).",
         "NSCameraUsageDescription": "Erlaubt das Aufnehmen von Fotos für deine Fortschrittsdokumentation.",
