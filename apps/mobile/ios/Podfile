@@ -10,7 +10,7 @@ prepare_react_native_project!
 # Fix Folly Coroutine header issue
 ENV['RCT_NEW_ARCH_ENABLED'] = '0'
 
-# Force static frameworks to avoid Firebase binary conflicts
+# Force static frameworks
 use_frameworks! :linkage => :static
 
 target 'mobile' do
@@ -49,17 +49,5 @@ target 'mobile' do
       :mac_catalyst_enabled => false
     )
     __apply_Xcode_12_5_M1_post_install_workaround(installer)
-    
-    # Fix Folly Coroutine header issue
-    installer.pods_project.targets.each do |target|
-      if target.name == 'React-Core'
-        target.build_configurations.each do |config|
-          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
-          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FOLLY_NO_CONFIG=1'
-          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FOLLY_MOBILE=1'
-          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FOLLY_USE_LIBCPP=1'
-        end
-      end
-    end
   end
 end
