@@ -42,7 +42,7 @@ export const notificationService = {
       }
 
       // Konfiguriere Expo Push Token (für Remote-Benachrichtigungen)
-      if (Platform.OS === 'ios') {
+      if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'default',
           importance: Notifications.AndroidImportance.MAX,
@@ -194,6 +194,51 @@ export const notificationService = {
     }
   },
 
+  // Plane Benachrichtigung nur für morgen (nicht heute)
+  async scheduleDailyNotificationForTomorrow() {
+    try {
+      // Lösche vorherige Benachrichtigung
+      await this.cancelDailyNotification();
+
+      // Prüfe ob Benachrichtigungen aktiviert sind
+      const enabled = await this.areNotificationsEnabled();
+      if (!enabled) return false;
+
+      // Hole gewünschte Zeit aus Einstellungen
+      const { hour, minute } = await this.getNotificationTime();
+
+      // Erstelle Zeit für morgen
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(hour, minute, 0, 0);
+
+      // Erstelle einmalige Benachrichtigung für morgen
+      await Notifications.scheduleNotificationAsync({
+        identifier: NOTIFICATION_ID,
+        content: {
+          title: '🚭 Zeit für deinen Check-in!',
+          body: 'Hast du heute geraucht oder warst du stark? Teile es mit uns!',
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          categoryIdentifier: 'checkin_reminder',
+          data: {
+            action: 'open_app',
+            screen: 'today',
+          },
+        },
+        trigger: {
+          type: 'date',
+          date: tomorrow,
+        },
+      });
+
+      console.log(`Daily notification scheduled for tomorrow at ${hour}:${minute.toString().padStart(2, '0')}`);
+      return true;
+    } catch (error) {
+      console.error('Error scheduling daily notification for tomorrow:', error);
+      return false;
+    }
+  },
 
   // Hole alle geplanten Benachrichtigungen
   async getScheduledNotifications() {

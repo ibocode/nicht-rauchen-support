@@ -25,7 +25,7 @@
       "ios",
       "android"
     ],
-    "githubUrl": "https://github.com/yourusername/nicht-rauchen-app",
+    "githubUrl": "https://github.com/iborekt/nicht-rauchen-app",
     "primaryColor": "#3BFF91",
     "backgroundColor": "#081023",
     "splash": {
@@ -37,7 +37,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.nichtrauchen.app",
       "buildNumber": "1",
-      "appStoreUrl": "https://apps.apple.com/app/nicht-rauchen/id123456789",
+      "appStoreUrl": "https://apps.apple.com/app/nicht-rauchen/id1234567890",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
@@ -73,10 +73,10 @@
       "associatedDomains": [
         "applinks:nichtrauchen.app"
       ],
-        "config": {
-          "usesNonExemptEncryption": false
-        },
-        "useFrameworks": "static"
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "useFrameworks": "static"
     },
     "android": {
       "adaptiveIcon": {
