@@ -17,7 +17,8 @@
 		"production": {
 			"autoIncrement": true,
 			"ios": {
-				"buildConfiguration": "Release"
+				"buildConfiguration": "Release",
+				"useFrameworks": "static"
 			},
 			"android": {
 				"buildType": "apk"

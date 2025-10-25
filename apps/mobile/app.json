@@ -6,12 +6,25 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "scheme": "nichtrauchen",
     "description": "Die ultimative App zum Rauchstopp! Verfolge deine Fortschritte, erhalte tägliche Erinnerungen und erreiche deine Ziele mit unserem intelligenten Tracking-System.",
-    "keywords": ["rauchstopp", "nicht rauchen", "gesundheit", "tracking", "streak", "motivation", "wellness", "lifestyle", "fitness"],
+    "keywords": [
+      "rauchstopp",
+      "nicht rauchen",
+      "gesundheit",
+      "tracking",
+      "streak",
+      "motivation",
+      "wellness",
+      "lifestyle",
+      "fitness"
+    ],
     "privacy": "public",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "githubUrl": "https://github.com/yourusername/nicht-rauchen-app",
     "primaryColor": "#3BFF91",
     "backgroundColor": "#081023",
@@ -27,7 +40,10 @@
       "appStoreUrl": "https://apps.apple.com/app/nicht-rauchen/id123456789",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["background-processing", "background-fetch"],
+        "UIBackgroundModes": [
+          "background-processing",
+          "background-fetch"
+        ],
         "NSUserNotificationsUsageDescription": "Diese App sendet tägliche Erinnerungen um 18:00 Uhr, um dich an deinen Check-in zu erinnern (nur wenn du noch nicht eingecheckt hast).",
         "NSCameraUsageDescription": "Erlaubt das Aufnehmen von Fotos für deine Fortschrittsdokumentation.",
         "NSPhotoLibraryUsageDescription": "Erlaubt den Zugriff auf deine Fotos für die Fortschrittsdokumentation.",
@@ -39,13 +55,24 @@
         "CFBundleVersion": "1",
         "LSRequiresIPhoneOS": true,
         "UILaunchStoryboardName": "SplashScreen",
-        "UIRequiredDeviceCapabilities": ["armv7"],
+        "UIRequiredDeviceCapabilities": [
+          "armv7"
+        ],
         "UIStatusBarStyle": "UIStatusBarStyleDefault",
         "UIViewControllerBasedStatusBarAppearance": false,
-        "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
-        "UISupportedInterfaceOrientations~ipad": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       },
-      "associatedDomains": ["applinks:nichtrauchen.app"],
+      "associatedDomains": [
+        "applinks:nichtrauchen.app"
+      ],
       "config": {
         "usesNonExemptEncryption": false
       }
@@ -82,7 +109,10 @@
               "host": "nichtrauchen.app"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -119,7 +149,7 @@
           "color": "#3BFF91",
           "defaultChannel": "default"
         }
-      ],
+      ]
     ],
     "web": {
       "bundler": "metro",
@@ -130,11 +160,16 @@
     },
     "extra": {
       "router": {
-        "origin": false
+        "origin": false,
+        "sitemap": false
+      },
+      "eas": {
+        "projectId": "d1387ef6-502c-4f95-b3c8-4532c26bdd96"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "owner": "iborekt"
   }
 }
