@@ -5,22 +5,13 @@ platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
 # Disable Firebase Analytics Ad ID support to avoid App Tracking Transparency requirements
-ENV['RNFirebaseAnalyticsWithoutAdIdSupport'] = 'true'
+# ENV['RNFirebaseAnalyticsWithoutAdIdSupport'] = 'true'
 
 # Fix Folly Coroutine header issue
 ENV['RCT_NEW_ARCH_ENABLED'] = '0'
 
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => linkage.to_sym
-else
-  # Use dynamic frameworks for Firebase compatibility
-  use_frameworks! :linkage => :dynamic
-end
-
-# Enable modular headers for Firebase Swift pods
-use_modular_headers!
+# Force static frameworks to avoid Firebase binary conflicts
+use_frameworks! :linkage => :static
 
 target 'mobile' do
   config = use_native_modules!
