@@ -14,7 +14,13 @@ linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
   Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
   use_frameworks! :linkage => linkage.to_sym
+else
+  # Use dynamic frameworks for Firebase compatibility
+  use_frameworks! :linkage => :dynamic
 end
+
+# Enable modular headers for Firebase Swift pods
+use_modular_headers!
 
 target 'mobile' do
   config = use_native_modules!

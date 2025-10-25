@@ -120,7 +120,14 @@
         }
       ],
       "expo-audio",
-      "expo-build-properties",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ],
       "expo-video",
       "expo-asset",
       [
