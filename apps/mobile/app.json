@@ -73,9 +73,10 @@
       "associatedDomains": [
         "applinks:nichtrauchen.app"
       ],
-      "config": {
-        "usesNonExemptEncryption": false
-      }
+        "config": {
+          "usesNonExemptEncryption": false
+        },
+        "useFrameworks": "static"
     },
     "android": {
       "adaptiveIcon": {
