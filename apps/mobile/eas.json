@@ -17,7 +17,11 @@
 		"production": {
 			"autoIncrement": true,
 			"ios": {
-				"buildConfiguration": "Release"
+				"buildConfiguration": "Release",
+				"clean": true,
+				"env": {
+					"RCT_NEW_ARCH_ENABLED": "0"
+				}
 			},
 			"android": {
 				"buildType": "apk"
