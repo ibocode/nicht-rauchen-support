@@ -9,18 +9,6 @@
     "newArchEnabled": false,
     "scheme": "nichtrauchen",
     "description": "Die ultimative App zum Rauchstopp! Verfolge deine Fortschritte, erhalte tägliche Erinnerungen und erreiche deine Ziele mit unserem intelligenten Tracking-System.",
-    "keywords": [
-      "rauchstopp",
-      "nicht rauchen",
-      "gesundheit",
-      "tracking",
-      "streak",
-      "motivation",
-      "wellness",
-      "lifestyle",
-      "fitness"
-    ],
-    "privacy": "public",
     "platforms": [
       "ios",
       "android"
@@ -75,8 +63,7 @@
       ],
       "config": {
         "usesNonExemptEncryption": false
-      },
-      "useFrameworks": "static"
+      }
     },
     "android": {
       "adaptiveIcon": {
