@@ -2,11 +2,10 @@
   "expo": {
     "name": "Nicht Rauchen",
     "slug": "nicht-rauchen-app",
-    "version": "1.0.0",
+    "version": "1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
     "scheme": "nichtrauchen",
     "description": "Die ultimative App zum Rauchstopp! Verfolge deine Fortschritte, erhalte tägliche Erinnerungen und erreiche deine Ziele mit unserem intelligenten Tracking-System.",
     "platforms": [
@@ -14,18 +13,32 @@
       "android"
     ],
     "githubUrl": "https://github.com/iborekt/nicht-rauchen-app",
-    "primaryColor": "#3BFF91",
-    "backgroundColor": "#081023",
+    "primaryColor": "#2DD4BF",
+    "backgroundColor": "#121217",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#081023"
+      "backgroundColor": "#121217"
     },
+    "jsEngine": "hermes",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nichtrauchen.app",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "appStoreUrl": "https://apps.apple.com/app/nicht-rauchen/id1234567890",
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#121217",
+        "dark": {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#121217"
+        }
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
@@ -38,14 +51,16 @@
         "NSLocationWhenInUseUsageDescription": "Erlaubt die Standortbestimmung für personalisierte Inhalte.",
         "CFBundleDisplayName": "Nicht Rauchen",
         "CFBundleName": "Nicht Rauchen",
-        "CFBundleShortVersionString": "1.0.0",
+        "CFBundleShortVersionString": "1.2",
         "CFBundleVersion": "1",
         "LSRequiresIPhoneOS": true,
+        "NSHumanReadableCopyright": "© 2024 Nicht Rauchen App. Alle Rechte vorbehalten.",
+        "LSApplicationCategoryType": "public.app-category.healthcare-fitness",
         "UILaunchStoryboardName": "SplashScreen",
         "UIRequiredDeviceCapabilities": [
           "armv7"
         ],
-        "UIStatusBarStyle": "UIStatusBarStyleDefault",
+        "UIStatusBarStyle": "UIStatusBarStyleLightContent",
         "UIViewControllerBasedStatusBarAppearance": false,
         "UISupportedInterfaceOrientations": [
           "UIInterfaceOrientationPortrait"
@@ -59,10 +74,7 @@
       },
       "associatedDomains": [
         "applinks:nichtrauchen.app"
-      ],
-      "config": {
-        "usesNonExemptEncryption": false
-      }
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -115,7 +127,8 @@
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
-          "resizeMode": "contain"
+          "resizeMode": "contain",
+          "backgroundColor": "#121217"
         }
       ],
       "expo-audio",
@@ -123,10 +136,14 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "deploymentTarget": "15.1",
+            "useFrameworks": "static",
+            "newArchEnabled": false
           }
         }
       ],
+      "./plugins/withReactNativeFix",
+      "./plugins/withDisableNonModularWarnings",
       "expo-video",
       "expo-asset",
       [

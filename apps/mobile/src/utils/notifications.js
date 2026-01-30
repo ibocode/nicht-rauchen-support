@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { quitData } from './quitData';
+import { getRandomQuote } from './quotes';
 
 // Konfiguration für Benachrichtigungen
 Notifications.setNotificationHandler({
@@ -10,38 +11,41 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
-const NOTIFICATION_STORAGE_KEY = 'notification_settings';
-const NOTIFICATION_ID = 'daily_checkin_reminder';
+const CHECKIN_STORAGE_KEY = 'notification_settings_checkin';
+const MOTIVATION_STORAGE_KEY = 'notification_settings_motivation';
+const LAST_REFILL_KEY = 'notification_last_refill_date';
+
+const CHECKIN_ID = 'daily_checkin_reminder';
+const MOTIVATION_ID_PREFIX = 'daily_motivation_reminder_';
+const LATE_REMINDER_ID = 'daily_late_check';
+const MILESTONE_ID_PREFIX = 'milestone_hype_';
 
 export const notificationService = {
   // Initialisierung der Benachrichtigungen
   async initialize() {
     try {
-      // Prüfe ob es ein physisches Gerät ist
       if (!Device.isDevice) {
-        console.log('Push notifications only work on physical devices');
+        // console.log('Push notifications only work on physical devices');
         return false;
       }
 
-      // Prüfe Berechtigungen
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
-      // Fordere Berechtigung an, falls noch nicht erteilt
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Push notification permission not granted');
         return false;
       }
 
-      // Konfiguriere Expo Push Token (für Remote-Benachrichtigungen)
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'default',
@@ -51,7 +55,6 @@ export const notificationService = {
         });
       }
 
-      console.log('Notifications initialized successfully');
       return true;
     } catch (error) {
       console.error('Error initializing notifications:', error);
@@ -59,318 +62,288 @@ export const notificationService = {
     }
   },
 
-  // Prüfe ob Benachrichtigungen aktiviert sind
-  async areNotificationsEnabled() {
+  // --- LATE REMINDER (23:00 Uhr - Nur wenn noch nicht eingecheckt) ---
+  
+  async scheduleLateReminder() {
     try {
-      const settings = await AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY);
-      if (!settings) return true; // Standard: aktiviert
-      
-      const parsedSettings = JSON.parse(settings);
-      return parsedSettings.enabled !== false;
-    } catch (error) {
-      console.error('Error checking notification settings:', error);
-      return true;
-    }
-  },
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') return;
 
-  // Aktiviere/Deaktiviere Benachrichtigungen
-  async setNotificationsEnabled(enabled) {
-    try {
-      const settings = await AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY);
-      const parsedSettings = settings ? JSON.parse(settings) : {};
-      
-      parsedSettings.enabled = enabled;
-      await AsyncStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(parsedSettings));
-
-      if (enabled) {
-        await this.scheduleDailyNotification();
-      } else {
-        await this.cancelDailyNotification();
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error setting notification preferences:', error);
-      return false;
-    }
-  },
-
-  // Prüfe ob heute bereits ein Check-in gemacht wurde
-  async hasCheckedInToday() {
-    try {
+      // Check if already handled today
       const todayStatus = await quitData.getDayStatus();
-      return todayStatus === 'success' || todayStatus === 'smoked';
-    } catch (error) {
-      console.error('Error checking today status:', error);
-      return false;
-    }
-  },
-
-  // Hole Benachrichtigungszeit aus Einstellungen
-  async getNotificationTime() {
-    try {
-      const settings = await AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY);
-      const parsedSettings = settings ? JSON.parse(settings) : {};
-      return parsedSettings.time || { hour: 18, minute: 0 }; // Standard: 18:00
-    } catch (error) {
-      console.error('Error getting notification time:', error);
-      return { hour: 18, minute: 0 };
-    }
-  },
-
-  // Setze Benachrichtigungszeit
-  async setNotificationTime(hour, minute) {
-    try {
-      const settings = await AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY);
-      const parsedSettings = settings ? JSON.parse(settings) : {};
-      
-      parsedSettings.time = { hour, minute };
-      await AsyncStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(parsedSettings));
-      
-      // Plane Benachrichtigung neu, falls aktiviert (nur für morgen, nicht heute)
-      const enabled = await this.areNotificationsEnabled();
-      if (enabled) {
-        await this.scheduleDailyNotificationForTomorrow();
+      if (todayStatus) {
+          // Wenn heute schon Status gesetzt, dann sicherstellen, dass wir erst morgen erinnern
+          await this.resolveLateReminder();
+          return;
       }
+
+      await Notifications.cancelScheduledNotificationAsync(LATE_REMINDER_ID);
       
-      return true;
-    } catch (error) {
-      console.error('Error setting notification time:', error);
-      return false;
-    }
-  },
-
-  // Plane tägliche Benachrichtigung zur gewünschten Zeit
-  async scheduleDailyNotification() {
-    try {
-      // Lösche vorherige Benachrichtigung
-      await this.cancelDailyNotification();
-
-      // Prüfe ob Benachrichtigungen aktiviert sind
-      const enabled = await this.areNotificationsEnabled();
-      if (!enabled) return false;
-
-      // Hole gewünschte Zeit aus Einstellungen
-      const { hour, minute } = await this.getNotificationTime();
-
-      // Erstelle wiederkehrende Benachrichtigung (nur für die Zukunft)
       await Notifications.scheduleNotificationAsync({
-        identifier: NOTIFICATION_ID,
+        identifier: LATE_REMINDER_ID,
         content: {
-          title: '🚭 Zeit für deinen Check-in!',
-          body: 'Hast du heute geraucht oder warst du stark? Teile es mit uns!',
+          title: 'Der Tag ist fast vorbei... 🌙',
+          body: 'Vergiss nicht, deinen Erfolg heute einzutragen!',
           sound: 'default',
           priority: Notifications.AndroidNotificationPriority.HIGH,
-          categoryIdentifier: 'checkin_reminder',
-          data: {
-            action: 'open_app',
-            screen: 'today',
-          },
+          data: { screen: 'today' },
         },
-        trigger: {
-          hour,
-          minute,
-          repeats: true,
+        trigger: { 
+          hour: 23, 
+          minute: 0, 
+          repeats: true 
         },
       });
-
-      console.log(`Daily notification scheduled for ${hour}:${minute.toString().padStart(2, '0')}`);
-      return true;
-    } catch (error) {
-      console.error('Error scheduling daily notification:', error);
-      return false;
+    } catch (e) {
+      console.log('Error scheduling late reminder:', e);
     }
   },
 
-  // Lösche tägliche Benachrichtigung
-  async cancelDailyNotification() {
+  async resolveLateReminder() {
     try {
-      await Notifications.cancelScheduledNotificationAsync(NOTIFICATION_ID);
-      console.log('Daily notification cancelled');
-      return true;
-    } catch (error) {
-      console.error('Error cancelling daily notification:', error);
-      return false;
-    }
-  },
-
-  // Plane Benachrichtigung nur für morgen (nicht heute)
-  async scheduleDailyNotificationForTomorrow() {
-    try {
-      // Lösche vorherige Benachrichtigung
-      await this.cancelDailyNotification();
-
-      // Prüfe ob Benachrichtigungen aktiviert sind
-      const enabled = await this.areNotificationsEnabled();
-      if (!enabled) return false;
-
-      // Hole gewünschte Zeit aus Einstellungen
-      const { hour, minute } = await this.getNotificationTime();
-
-      // Erstelle Zeit für morgen
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(hour, minute, 0, 0);
-
-      // Erstelle einmalige Benachrichtigung für morgen
-      await Notifications.scheduleNotificationAsync({
-        identifier: NOTIFICATION_ID,
+       await Notifications.cancelScheduledNotificationAsync(LATE_REMINDER_ID);
+       
+       // Schedule for daily 23:00 (repeating)
+       await Notifications.scheduleNotificationAsync({
+        identifier: LATE_REMINDER_ID,
         content: {
-          title: '🚭 Zeit für deinen Check-in!',
-          body: 'Hast du heute geraucht oder warst du stark? Teile es mit uns!',
+          title: 'Der Tag ist fast vorbei... 🌙',
+          body: 'Vergiss nicht, deinen Erfolg heute einzutragen!',
           sound: 'default',
           priority: Notifications.AndroidNotificationPriority.HIGH,
-          categoryIdentifier: 'checkin_reminder',
-          data: {
-            action: 'open_app',
-            screen: 'today',
-          },
+          data: { screen: 'today' },
         },
-        trigger: {
-          type: 'date',
-          date: tomorrow,
+        trigger: { 
+          hour: 23, 
+          minute: 0, 
+          repeats: true 
         },
       });
+      
+    } catch (e) {
+      console.log('Error resolving late reminder:', e);
+    }
+  },
+  
+  async scheduleMilestoneReminder(days) {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') return;
+      
+      const triggerDate = new Date();
+      triggerDate.setDate(triggerDate.getDate() + 1);
+      triggerDate.setHours(9, 0, 0, 0);
+      
+      let title = "Großer Tag voraus! 🚀";
+      let body = `Morgen erreichst du ${days} Tage rauchfrei! Bleib stark!`;
+      
+      if (days === 7) {
+         title = "Eine Woche fast geschafft! 🎉";
+         body = "Morgen ist es soweit: 1 Woche rauchfrei! Du bist großartig.";
+      } else if (days === 30) {
+         title = "Fast 1 Monat! 🌟";
+         body = "Nur noch 1 Tag bis zum 1-Monats-Meilenstein. Unglaublich!";
+      } else if (days === 365) {
+         title = "Das Jahr ist fast voll! 🏆";
+         body = "Morgen bist du 1 Jahr rauchfrei. Eine Legende!";
+      }
 
-      console.log(`Daily notification scheduled for tomorrow at ${hour}:${minute.toString().padStart(2, '0')}`);
-      return true;
-    } catch (error) {
-      console.error('Error scheduling daily notification for tomorrow:', error);
-      return false;
+      await Notifications.scheduleNotificationAsync({
+        identifier: `${MILESTONE_ID_PREFIX}${days}`,
+        content: {
+          title,
+          body,
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          data: { screen: 'streak' },
+        },
+        trigger: { date: triggerDate },
+      });
+      
+    } catch (e) {
+       console.log('Error scheduling milestone:', e);
     }
   },
 
-  // Hole alle geplanten Benachrichtigungen
-  async getScheduledNotifications() {
+  // --- CHECK-IN (Abends) ---
+
+  async getCheckinSettings() {
     try {
-      return await Notifications.getAllScheduledNotificationsAsync();
+      const settings = await AsyncStorage.getItem(CHECKIN_STORAGE_KEY);
+      // Standard: 18:00 Uhr, Aktiviert
+      return settings ? JSON.parse(settings) : { enabled: true, time: { hour: 18, minute: 0 } };
     } catch (error) {
-      console.error('Error getting scheduled notifications:', error);
-      return [];
+      return { enabled: true, time: { hour: 18, minute: 0 } };
     }
   },
 
+  async setCheckinEnabled(enabled) {
+    const settings = await this.getCheckinSettings();
+    settings.enabled = enabled;
+    await AsyncStorage.setItem(CHECKIN_STORAGE_KEY, JSON.stringify(settings));
+    
+    if (enabled) await this.scheduleCheckin(settings.time);
+    else await Notifications.cancelScheduledNotificationAsync(CHECKIN_ID);
+    
+    return true;
+  },
 
-  // Hole Benachrichtigungseinstellungen
-  async getNotificationSettings() {
+  async setCheckinTime(hour, minute) {
+    const settings = await this.getCheckinSettings();
+    settings.time = { hour, minute };
+    await AsyncStorage.setItem(CHECKIN_STORAGE_KEY, JSON.stringify(settings));
+    
+    if (settings.enabled) await this.scheduleCheckin(settings.time);
+    return true;
+  },
+
+  async scheduleCheckin({ hour, minute }) {
+    await Notifications.cancelScheduledNotificationAsync(CHECKIN_ID);
+    
+    await Notifications.scheduleNotificationAsync({
+      identifier: CHECKIN_ID,
+      content: {
+        title: 'Wie war dein Tag? 🌙',
+        body: 'Nimm dir kurz Zeit für dich.',
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        data: { screen: 'today' },
+      },
+      trigger: { hour, minute, repeats: true },
+    });
+  },
+
+  // --- MOTIVATION (Smart Random) ---
+
+  async getMotivationSettings() {
     try {
-      const settings = await AsyncStorage.getItem(NOTIFICATION_STORAGE_KEY);
+      const settings = await AsyncStorage.getItem(MOTIVATION_STORAGE_KEY);
+      // Enabled by default
       return settings ? JSON.parse(settings) : { enabled: true };
     } catch (error) {
-      console.error('Error getting notification settings:', error);
       return { enabled: true };
     }
   },
 
-  // Aktualisiere Benachrichtigungseinstellungen
-  async updateNotificationSettings(updates) {
-    try {
-      const currentSettings = await this.getNotificationSettings();
-      const newSettings = { ...currentSettings, ...updates };
-      
-      await AsyncStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(newSettings));
-      
-      // Plane Benachrichtigung neu, falls aktiviert
-      if (newSettings.enabled) {
-        await this.scheduleDailyNotification();
-      } else {
-        await this.cancelDailyNotification();
-      }
-      
-      return newSettings;
-    } catch (error) {
-      console.error('Error updating notification settings:', error);
-      return currentSettings;
+  async setMotivationEnabled(enabled) {
+    const settings = await this.getMotivationSettings();
+    settings.enabled = enabled;
+    await AsyncStorage.setItem(MOTIVATION_STORAGE_KEY, JSON.stringify(settings));
+    
+    if (enabled) {
+        await this.refillNotifications();
+    } else {
+        await this.cancelAllMotivations();
     }
+    
+    return true;
   },
 
-  // Prüfe Berechtigungsstatus
-  async getPermissionStatus() {
+  // Helper: Cancel all planned motivation notifications
+  async cancelAllMotivations() {
     try {
-      const { status } = await Notifications.getPermissionsAsync();
-      return status;
-    } catch (error) {
-      console.error('Error getting permission status:', error);
-      return 'undetermined';
-    }
-  },
-
-  // Fordere Berechtigung an
-  async requestPermission() {
-    try {
-      const { status } = await Notifications.requestPermissionsAsync();
-      return status === 'granted';
-    } catch (error) {
-      console.error('Error requesting permission:', error);
-      return false;
-    }
-  },
-
-  // Initialisiere Benachrichtigungen beim App-Start
-  async initializeOnAppStart() {
-    try {
-      const initialized = await this.initialize();
-      if (initialized) {
-        // Lösche alle bestehenden Benachrichtigungen zuerst
-        await this.cancelDailyNotification();
-        
-        // Plane tägliche Benachrichtigung, falls aktiviert (nur planen, nicht sofort senden)
-        const enabled = await this.areNotificationsEnabled();
-        if (enabled) {
-          // Plane Benachrichtigung nur für morgen, nicht für heute
-          await this.scheduleDailyNotificationForTomorrow();
+        // We cancel all notifications that start with our ID prefix
+        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+        for (const notification of scheduled) {
+            if (notification.identifier.startsWith(MOTIVATION_ID_PREFIX)) {
+                await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+            }
         }
-      }
-      return initialized;
-    } catch (error) {
-      console.error('Error initializing notifications on app start:', error);
-      return false;
+    } catch (e) {
+        console.log('Error cancelling motivations:', e);
     }
   },
 
-  // Plane Benachrichtigung nur für morgen (nicht heute)
-  async scheduleDailyNotificationForTomorrow() {
+  // Main Logic: Schedule random times for the next 7 days
+  async refillNotifications() {
     try {
-      // Lösche vorherige Benachrichtigung
-      await this.cancelDailyNotification();
+        // 1. Check if enabled
+        const settings = await this.getMotivationSettings();
+        if (!settings.enabled) return;
 
-      // Prüfe ob Benachrichtigungen aktiviert sind
-      const enabled = await this.areNotificationsEnabled();
-      if (!enabled) return false;
+        // 2. Check frequency (Don't refill if done recently)
+        const lastRefill = await AsyncStorage.getItem(LAST_REFILL_KEY);
+        const now = new Date();
+        
+        if (lastRefill) {
+            const lastRefillDate = new Date(lastRefill);
+            const diffTime = Math.abs(now - lastRefillDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            
+            // Wenn vor weniger als 4 Tagen aufgefüllt wurde, abbrechen.
+            // Wir planen 7 Tage im Voraus, also ist Puffer da.
+            if (diffDays < 4) {
+                // console.log('Skipping notification refill, recently updated.');
+                return;
+            }
+        }
 
-      // Hole gewünschte Zeit aus Einstellungen
-      const { hour, minute } = await this.getNotificationTime();
+        // 3. Cancel old ones to prevent duplicates
+        await this.cancelAllMotivations();
 
-      // Erstelle Zeit für morgen
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(hour, minute, 0, 0);
+        // 4. Schedule for next 7 days
+        
+        for (let i = 1; i <= 7; i++) {
+            const day = new Date(now);
+            day.setDate(day.getDate() + i); // Future days
 
-      // Erstelle einmalige Benachrichtigung für morgen
-      await Notifications.scheduleNotificationAsync({
-        identifier: NOTIFICATION_ID,
-        content: {
-          title: '🚭 Zeit für deinen Check-in!',
-          body: 'Hast du heute geraucht oder warst du stark? Teile es mit uns!',
-          sound: 'default',
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-          categoryIdentifier: 'checkin_reminder',
-          data: {
-            action: 'open_app',
-            screen: 'today',
-          },
-        },
-        trigger: {
-          type: 'date',
-          date: tomorrow,
-        },
-      });
+            // Slot 1: 10:00 - 14:00
+            const hour1 = 10 + Math.floor(Math.random() * 4); // 10, 11, 12, 13
+            const min1 = Math.floor(Math.random() * 60);
+            
+            await this.scheduleSingleMotivation(day, hour1, min1, i * 2 - 1);
 
-      console.log(`Daily notification scheduled for tomorrow at ${hour}:${minute.toString().padStart(2, '0')}`);
-      return true;
-    } catch (error) {
-      console.error('Error scheduling daily notification for tomorrow:', error);
-      return false;
+            // Slot 2: 16:00 - 20:00
+            const hour2 = 16 + Math.floor(Math.random() * 4); // 16, 17, 18, 19
+            const min2 = Math.floor(Math.random() * 60);
+
+            await this.scheduleSingleMotivation(day, hour2, min2, i * 2);
+        }
+        
+        // Update timestamp
+        await AsyncStorage.setItem(LAST_REFILL_KEY, now.toISOString());
+        
+    } catch (e) {
+        console.log('Error refilling notifications:', e);
     }
+  },
+
+  async scheduleSingleMotivation(dateObj, hour, minute, index) {
+    const triggerDate = new Date(dateObj);
+    triggerDate.setHours(hour, minute, 0, 0);
+
+    const quote = getRandomQuote();
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: `${MOTIVATION_ID_PREFIX}${index}`, // Unique ID per slot
+      content: {
+        title: '✨ Dein täglicher Impuls',
+        body: quote,
+        sound: 'default',
+        data: { screen: 'today' },
+      },
+      trigger: { date: triggerDate }, // Trigger at specific date/time
+    });
+  },
+
+  // --- GLOBAL ---
+
+  async requestPermission() {
+    const { status } = await Notifications.requestPermissionsAsync();
+    return status === 'granted';
+  },
+
+  async getPermissionStatus() {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status;
+  },
+
+  async initializeOnAppStart() {
+    const success = await this.initialize();
+    if (success) {
+       // Stelle sicher, dass der Late Reminder läuft
+       await this.scheduleLateReminder();
+    }
+    return success;
   },
 };

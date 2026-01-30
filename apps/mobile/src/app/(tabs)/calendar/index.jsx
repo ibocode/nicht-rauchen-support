@@ -5,6 +5,8 @@ import {
   ScrollView,
   Dimensions,
   Animated,
+  StyleSheet,
+  Easing
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,114 +17,100 @@ import {
   Poppins_400Regular,
   Poppins_600SemiBold,
   Inter_400Regular,
-  Inter_600SemiBold,
 } from '@expo-google-fonts/inter';
 import { quitData } from '@/utils/quitData';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Circle, Path, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
+import { PALETTE, SPACING, RADIUS } from '@/constants/theme';
 
-const daysInMonth = (date) => {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+const { width } = Dimensions.get('window');
+
+// --- Artistic Background Reuse ---
+const FloatingParticle = ({ delay = 0, duration = 4000, size = 20, startX, startY, color }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true, delay: delay }),
+        Animated.timing(anim, { toValue: 0, duration: duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+      ])
+    ).start();
+  }, []);
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
+  const translateX = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 20, 0] });
+  const opacity = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.8, 0.4] });
+  return (
+    <Animated.View style={{ position: 'absolute', left: startX, top: startY, transform: [{ translateY }, { translateX }], opacity }}>
+       <Svg width={size} height={size} viewBox="0 0 24 24">
+         <Path d="M12 2C12 2 14 8 18 10C22 12 22 14 18 16C14 18 12 22 12 22C12 22 10 18 6 16C2 14 2 12 6 10C10 8 12 2 12 2Z" fill={color} opacity={0.6} />
+       </Svg>
+    </Animated.View>
+  );
 };
+
+const BackgroundArt = ({ theme }) => {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <FloatingParticle startX="15%" startY="10%" size={25} color={theme.primary} delay={0} duration={8000} />
+      <FloatingParticle startX="80%" startY="60%" size={30} color={theme.success} delay={2000} duration={9000} />
+      <FloatingParticle startX="40%" startY="85%" size={20} color={theme.money} delay={4000} duration={7000} />
+      <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id="grad" cx="50%" cy="20%" rx="60%" ry="40%" fx="50%" fy="20%" gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor={theme.primary} stopOpacity="0.1" />
+            <Stop offset="1" stopColor={theme.background[0]} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx="50%" cy="20%" r="600" fill="url(#grad)" />
+      </Svg>
+    </View>
+  );
+};
+
+import { FadeInView } from '@/components/FadeInView';
+
+const daysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 
 const getFirstDayOfMonth = (date) => {
   const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
   const dayOfWeek = firstDay.getDay();
-  // getDay() gibt 0=Sonntag, 1=Montag, ..., 6=Samstag zurück
-  // Für deutschen Kalender: 0=Montag, 1=Dienstag, ..., 6=Sonntag
-  // Sonntag (0) wird zu 6, Montag (1) wird zu 0, etc.
   return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 };
 
 const isToday = (date) => {
   const today = new Date();
-  const todayDate = today.getDate();
-  const todayMonth = today.getMonth();
-  const todayYear = today.getFullYear();
-  
-  const checkDate = date.getDate();
-  const checkMonth = date.getMonth();
-  const checkYear = date.getFullYear();
-  
-  return (
-    checkDate === todayDate &&
-    checkMonth === todayMonth &&
-    checkYear === todayYear
-  );
+  return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
 };
 
-const getMonthName = (date) => {
-  return date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
-};
+const getMonthName = (date) => date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
-  const { width } = Dimensions.get('window');
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [monthCheckIns, setMonthCheckIns] = useState({});
   const [currentStreak, setCurrentStreak] = useState(0);
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
 
-  const calendarFadeAnimation = useRef(new Animated.Value(1)).current; // Startet mit 1
-
-  // Farben im Onboarding-Stil
-  const colors = useMemo(() => {
-    if (darkModeEnabled) {
-      return {
-        background: ['#0A0F0A', '#0F1A0F', '#0A0F0A'],
-        cardBackground: 'rgba(255, 255, 255, 0.05)',
-        cardBorder: 'rgba(255, 255, 255, 0.1)',
-        textPrimary: '#FFFFFF',
-        textSecondary: '#A1A1AA',
-        success: '#10B981',
-        successBg: 'rgba(16, 185, 129, 0.1)',
-        error: '#EF4444',
-        errorBg: 'rgba(239, 68, 68, 0.1)',
-        neutral: '#71717A',
-        neutralBg: 'rgba(255, 255, 255, 0.05)',
-        today: '#10B981',
-        todayBg: 'rgba(16, 185, 129, 0.1)',
-        buttonBg: 'rgba(255, 255, 255, 0.1)',
-        buttonBorder: 'rgba(255, 255, 255, 0.2)',
-      };
-    } else {
-      return {
-        background: ['#F8FAFC', '#F1F5F9', '#E2E8F0'],
-        cardBackground: '#FFFFFF',
-        cardBorder: '#E2E8F0',
-        textPrimary: '#1E293B',
-        textSecondary: '#64748B',
-        success: '#10B981',
-        successBg: '#ECFDF5',
-        error: '#EF4444',
-        errorBg: '#FEF2F2',
-        neutral: '#6B7280',
-        neutralBg: '#F9FAFB',
-        today: '#3B82F6',
-        todayBg: '#EFF6FF',
-        buttonBg: '#F8FAFC',
-        buttonBorder: '#E2E8F0',
-      };
-    }
-  }, [darkModeEnabled]);
+  const calendarFadeAnimation = useRef(new Animated.Value(1)).current;
+  // const fadeAnimation = useRef(new Animated.Value(0)).current; // Removed to prevent fast-switching glitches
 
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_600SemiBold,
     Inter_400Regular,
-    Inter_600SemiBold,
   });
+
+  const theme = useMemo(() => darkModeEnabled ? PALETTE.dark : PALETTE.light, [darkModeEnabled]);
 
   const loadData = useCallback(async () => {
     try {
-      console.log('Loading calendar data for:', currentDate.toLocaleDateString('de-DE'));
       const [checkIns, streak] = await Promise.all([
         quitData.getMonthCheckIns(currentDate),
         quitData.getCurrentStreak(),
       ]);
-
-      console.log('Loaded data:', { checkIns, streak });
       setMonthCheckIns(checkIns);
       setCurrentStreak(streak);
     } catch (error) {
@@ -130,15 +118,11 @@ export default function CalendarScreen() {
     }
   }, [currentDate]);
 
-  // Settings sofort laden
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const settings = await AsyncStorage.getItem('settings');
-        if (settings) {
-          const parsedSettings = JSON.parse(settings);
-          setDarkModeEnabled(parsedSettings.darkModeEnabled !== false);
-        }
+        const settings = await quitData.getSettings();
+        setDarkModeEnabled(settings.darkModeEnabled !== false);
       } catch (error) {
         console.error('Error loading settings:', error);
       }
@@ -146,25 +130,13 @@ export default function CalendarScreen() {
     loadSettings();
   }, []);
 
-  // Daten sofort beim Start laden
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
   const fadeInCalendar = useCallback(() => {
     calendarFadeAnimation.setValue(0);
-    Animated.timing(calendarFadeAnimation, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(calendarFadeAnimation, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   }, [calendarFadeAnimation]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData]),
-  );
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handlePreviousMonth = () => {
     const newDate = new Date(currentDate);
@@ -185,88 +157,46 @@ export default function CalendarScreen() {
     fadeInCalendar();
   };
 
-
-
   const generateCalendarGrid = () => {
     const daysInCurrentMonth = daysInMonth(currentDate);
     const firstDay = getFirstDayOfMonth(currentDate);
-    const cellWidth = (width - 120) / 7; // Mehr Platz für bessere Darstellung
+    const cellWidth = (width - SPACING.l * 2 - SPACING.l * 2) / 7; // Adjust for padding
     const rows = [];
-
-    console.log('Calendar Debug:', {
-      month: currentDate.getMonth() + 1,
-      year: currentDate.getFullYear(),
-      daysInMonth: daysInCurrentMonth,
-      firstDay: firstDay,
-      firstDayName: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][firstDay]
-    });
-
-    // Erstelle alle Tage des Monats
     const allDays = [];
     
-    // Leere Zellen für die ersten Tage des Monats
-    for (let i = 0; i < firstDay; i++) {
-      allDays.push(null);
-    }
+    for (let i = 0; i < firstDay; i++) allDays.push(null);
+    for (let day = 1; day <= daysInCurrentMonth; day++) allDays.push(day);
 
-    // Tage des Monats
-    for (let day = 1; day <= daysInCurrentMonth; day++) {
-      allDays.push(day);
-    }
-
-    // Teile die Tage in Reihen von 7 auf
     for (let i = 0; i < allDays.length; i += 7) {
       const weekDays = allDays.slice(i, i + 7);
-      
-      // Fülle die letzte Reihe mit null auf, falls sie nicht vollständig ist
-      while (weekDays.length < 7) {
-        weekDays.push(null);
-      }
+      while (weekDays.length < 7) weekDays.push(null);
 
       rows.push(
-        <View
-          key={`week-${i / 7}`}
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            marginBottom: 4,
-          }}
-        >
+        <View key={`week-${i / 7}`} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
           {weekDays.map((day, dayIndex) => {
-            if (day === null) {
-              return (
-                <View
-                  key={`empty-${i + dayIndex}`}
-                  style={{
-                    width: cellWidth,
-                    height: cellWidth,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                />
-              );
-            }
+            if (day === null) return <View key={`empty-${i + dayIndex}`} style={{ width: cellWidth, height: cellWidth }} />;
 
             const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
             const isCurrentDay = isToday(dayDate);
             const dayStatus = monthCheckIns[day];
 
-            let backgroundColor = colors.neutralBg;
-            let borderColor = colors.buttonBorder;
-            let textColor = colors.textSecondary;
+            let backgroundColor = 'transparent';
+            let textColor = theme.textSecondary;
+            let borderColor = 'transparent';
+            let borderWidth = 0;
 
             if (dayStatus === 'success') {
-              backgroundColor = colors.successBg;
-              borderColor = colors.success;
-              textColor = colors.success;
+              backgroundColor = theme.successGlow;
+              textColor = theme.success;
             } else if (dayStatus === 'smoked') {
-              backgroundColor = colors.errorBg;
-              borderColor = colors.error;
-              textColor = colors.error;
-            } else if (isCurrentDay) {
-              backgroundColor = colors.todayBg;
-              borderColor = colors.today;
-              textColor = colors.today;
+              backgroundColor = theme.errorGlow;
+              textColor = theme.error;
+            } 
+            
+            if (isCurrentDay) {
+               borderColor = theme.primary;
+               borderWidth = 1;
+               textColor = theme.primary;
             }
 
             return (
@@ -278,230 +208,100 @@ export default function CalendarScreen() {
                   justifyContent: 'center',
                   alignItems: 'center',
                   backgroundColor,
-                  borderRadius: 8,
-                  borderWidth: 2,
+                  borderRadius: cellWidth / 2,
+                  borderWidth,
                   borderColor,
                 }}
               >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontFamily: 'Poppins_600SemiBold',
-                    color: textColor,
-                  }}
-                >
+                <Text style={{ fontSize: 14, fontFamily: 'Poppins_600SemiBold', color: textColor }}>
                   {day}
                 </Text>
+                {/* Kleiner Punkt für Status wenn kein Background */}
+                {!dayStatus && !isCurrentDay && (
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: theme.surfaceHighlight, marginTop: 4 }} />
+                )}
               </View>
             );
           })}
         </View>
       );
     }
-
     return rows;
   };
 
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0A0F0A' }}>
-        <LinearGradient
-          colors={['#0A0F0A', '#0F1A0F', '#0A0F0A']}
-          style={{ flex: 1 }}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-      </View>
-    );
-  }
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: theme.background[0] }} />;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background[0] }}>
-      <LinearGradient
-        colors={colors.background}
-        style={{ flex: 1 }}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <StatusBar style={darkModeEnabled ? "light" : "dark"} />
+    <FadeInView style={{ flex: 1, backgroundColor: theme.background[0] }}>
+      <LinearGradient colors={theme.background} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+      <BackgroundArt theme={theme} />
+      <StatusBar style={darkModeEnabled ? "light" : "dark"} />
 
-        <ScrollView
-          contentContainerStyle={{
-            paddingTop: insets.top + 20,
-            paddingBottom: insets.bottom + 110,
-            paddingHorizontal: 20,
-          }}
-        >
-          {/* Header */}
-          <View
-            style={{
-              backgroundColor: colors.cardBackground,
-              borderRadius: 20,
-              padding: 20,
-              marginBottom: 20,
-              borderWidth: 1,
-              borderColor: colors.cardBorder,
-              shadowColor: '#000',
-              shadowOpacity: 0.1,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 5,
-            }}
-          >
-            {/* Monats-Navigation */}
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 20,
-              }}
-            >
-              <TouchableOpacity
-                onPress={handlePreviousMonth}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: colors.buttonBg,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  borderWidth: 1,
-                  borderColor: colors.buttonBorder,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.1,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 6,
-                }}
-              >
-                <Text style={{ fontSize: 20, color: colors.textSecondary }}>‹</Text>
-              </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ paddingTop: insets.top + SPACING.l, paddingBottom: insets.bottom + 100, paddingHorizontal: SPACING.l }}>
+          
+          <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 28, color: theme.text, marginBottom: SPACING.m }}>Kalender</Text>
 
-              <View style={{ alignItems: 'center' }}>
-                <Text
-                  style={{
-                    fontSize: 20,
-                    fontFamily: 'Poppins_600SemiBold',
-                    color: colors.textPrimary,
-                    textAlign: 'center',
-                  }}
-                >
-                  {getMonthName(currentDate)}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontFamily: 'Poppins_400Regular',
-                    color: colors.textSecondary,
-                    marginTop: 4,
-                  }}
-                >
-                  Aktuelle Serie: {currentStreak} Tage
-                </Text>
-              </View>
+          <View style={{ 
+            backgroundColor: theme.surface, 
+            borderRadius: RADIUS.m, 
+            padding: SPACING.l, 
+            marginBottom: SPACING.l,
+            borderWidth: 1,
+            borderColor: theme.border 
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xl }}>
+               <TouchableOpacity onPress={handlePreviousMonth} style={{ padding: SPACING.s }}>
+                  <Ionicons name="chevron-back" size={24} color={theme.textSecondary} />
+               </TouchableOpacity>
+               
+               <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 18, color: theme.text }}>{getMonthName(currentDate)}</Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.primary, letterSpacing: 1 }}>SERIE: {currentStreak} TAGE</Text>
+               </View>
 
-              <TouchableOpacity
-                onPress={handleNextMonth}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: colors.buttonBg,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  borderWidth: 1,
-                  borderColor: colors.buttonBorder,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.1,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 6,
-                }}
-              >
-                <Text style={{ fontSize: 20, color: colors.textSecondary }}>›</Text>
-              </TouchableOpacity>
+               <TouchableOpacity onPress={handleNextMonth} style={{ padding: SPACING.s }}>
+                  <Ionicons name="chevron-forward" size={24} color={theme.textSecondary} />
+               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              onPress={handleGoToday}
-              style={{
-                backgroundColor: colors.todayBg,
-                borderRadius: 12,
-                paddingVertical: 12,
-                paddingHorizontal: 20,
-                borderWidth: 1,
-                borderColor: colors.today,
-                alignItems: 'center',
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontFamily: 'Poppins_600SemiBold',
-                  color: colors.today,
-                }}
-              >
-                Heute
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Kalender */}
-          <View
-            style={{
-              backgroundColor: colors.cardBackground,
-              borderRadius: 20,
-              padding: 20,
-              marginBottom: 20,
-              borderWidth: 1,
-              borderColor: colors.cardBorder,
-              shadowColor: '#000',
-              shadowOpacity: 0.1,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 5,
-            }}
-          >
-            {/* Wochentage */}
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                marginBottom: 15,
-                paddingHorizontal: 20,
-              }}
-            >
+            {/* Week Days Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.m, paddingHorizontal: 0 }}>
               {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((day, index) => (
-                <Text
-                  key={index}
-                  style={{
-                    fontSize: 14,
-                    fontFamily: 'Poppins_600SemiBold',
-                    color: colors.textSecondary,
-                    width: (width - 120) / 7,
-                    textAlign: 'center',
-                  }}
-                >
+                <Text key={index} style={{ 
+                   fontSize: 12, fontFamily: 'Inter_400Regular', color: theme.textMuted, 
+                   width: (width - SPACING.l * 4) / 7, textAlign: 'center' 
+                }}>
                   {day}
                 </Text>
               ))}
             </View>
 
-            {/* Kalender-Grid */}
-            <Animated.View
-              style={{
-                opacity: calendarFadeAnimation,
-                paddingHorizontal: 20,
-              }}
-            >
+            {/* Grid */}
+            <Animated.View style={{ opacity: calendarFadeAnimation }}>
               {generateCalendarGrid()}
             </Animated.View>
+
           </View>
 
+          <TouchableOpacity
+            onPress={handleGoToday}
+            style={{
+              alignSelf: 'center',
+              paddingVertical: SPACING.s,
+              paddingHorizontal: SPACING.l,
+              borderRadius: RADIUS.full,
+              backgroundColor: theme.surfaceHighlight,
+              borderWidth: 1,
+              borderColor: theme.border
+            }}
+          >
+            <Text style={{ color: theme.text, fontFamily: 'Inter_400Regular', fontSize: 12 }}>Zurück zu Heute</Text>
+          </TouchableOpacity>
+
         </ScrollView>
-      </LinearGradient>
-      
-    </View>
+      </View>
+    </FadeInView>
   );
 }

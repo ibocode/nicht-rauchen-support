@@ -1,6 +1,5 @@
 import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { quitData } from '@/utils/quitData';
 
 export default function Index() {
@@ -12,28 +11,18 @@ export default function Index() {
 
   const checkOnboarding = async () => {
     try {
-      // Prüfe sowohl app_onboarded als auch ob Settings existieren
-      const [onboarded, settings] = await Promise.all([
-        AsyncStorage.getItem('app_onboarded'),
-        quitData.getSettings()
-      ]);
+      // Ensure quitData is initialized before checking
+      await quitData.init();
       
-      // Wenn app_onboarded explizit auf 'true' gesetzt ist, ist die App onboarded
-      if (onboarded === 'true') {
-        setIsOnboarded(true);
-        return;
-      }
-      
-      // Wenn app_onboarded explizit auf 'false' gesetzt ist (Reset), zeige Onboarding
-      if (onboarded === 'false') {
+      // Safety check
+      if (!quitData || typeof quitData.isProUser !== 'function') {
+        console.log('quitData not ready yet');
         setIsOnboarded(false);
         return;
       }
-      
-      // Wenn app_onboarded nicht existiert, prüfe Settings als Fallback
-      const hasSettings = settings && Object.keys(settings).length > 0;
-      setIsOnboarded(hasSettings);
-      
+
+      const isPro = await quitData.isProUser();
+      setIsOnboarded(isPro);
     } catch (error) {
       console.error('Error checking onboarding:', error);
       setIsOnboarded(false);

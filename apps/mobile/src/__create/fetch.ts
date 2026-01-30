@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { fetch as expoFetch } from 'expo/fetch';
 
 const originalFetch = fetch;
-const authKey = `${process.env.EXPO_PUBLIC_PROJECT_GROUP_ID}-jwt`;
+const authKey = `${process.env.EXPO_PUBLIC_PROJECT_GROUP_ID || 'nichtrauchen'}-jwt`;
 
 const getURLFromArgs = (...args: Parameters<typeof fetch>) => {
   const [urlArg] = args;
@@ -59,10 +59,10 @@ const fetchToWeb = async function fetchWithHeaders(...args: Params) {
   const finalHeaders = new Headers(initHeaders);
 
   const headers = {
-    'x-createxyz-project-group-id': process.env.EXPO_PUBLIC_PROJECT_GROUP_ID,
-    host: process.env.EXPO_PUBLIC_HOST,
-    'x-forwarded-host': process.env.EXPO_PUBLIC_HOST,
-    'x-createxyz-host': process.env.EXPO_PUBLIC_HOST,
+    'x-createxyz-project-group-id': process.env.EXPO_PUBLIC_PROJECT_GROUP_ID || '',
+    host: process.env.EXPO_PUBLIC_HOST || '',
+    'x-forwarded-host': process.env.EXPO_PUBLIC_HOST || '',
+    'x-createxyz-host': process.env.EXPO_PUBLIC_HOST || '',
   };
 
   for (const [key, value] of Object.entries(headers)) {

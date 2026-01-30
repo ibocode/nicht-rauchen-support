@@ -1,0 +1,42 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Premium Teal Gradient -->
+    <linearGradient id="tealGrad" x1="0" y1="1024" x2="1024" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F766E" />
+      <stop offset="50%" stop-color="#14B8A6" />
+      <stop offset="100%" stop-color="#2DD4BF" />
+    </linearGradient>
+    
+    <!-- Dark Background Gradient -->
+    <linearGradient id="bgGrad" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1A1F2B" />
+      <stop offset="100%" stop-color="#111827" />
+    </linearGradient>
+
+    <!-- Soft Glow -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="25" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background Shape (Rounded Square for iOS/Android) -->
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#bgGrad)" />
+
+  <!-- The Symbol: A stylized "N" transforming into a Leaf/Path -->
+  <g transform="translate(512, 512) scale(0.9) translate(-512, -512)">
+      
+      <!-- Broken Cigarette Part (Darker, rigid) -->
+      <path d="M300 700 L450 550" stroke="#374151" stroke-width="80" stroke-linecap="round" />
+      <path d="M260 740 L290 710" stroke="#4B5563" stroke-width="20" stroke-linecap="round" />
+      
+      <!-- Transformation / Leaf Part (Vibrant, organic curve) -->
+      <path d="M450 550 C450 550 500 250 800 200" stroke="url(#tealGrad)" stroke-width="80" stroke-linecap="round" filter="url(#glow)" />
+      
+      <!-- The Leaf Blade detail -->
+      <path d="M800 200 Q600 300 550 500" fill="none" stroke="#2DD4BF" stroke-width="10" stroke-opacity="0.5" />
+
+      <!-- Vitality Dot -->
+      <circle cx="800" cy="200" r="25" fill="#FFFFFF" />
+  </g>
+</svg>

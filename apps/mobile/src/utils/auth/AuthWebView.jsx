@@ -36,7 +36,7 @@ export const AuthWebView = ({ mode, proxyURL, baseURL }) => {
     }
     const handleMessage = (event) => {
       // Verify the origin for security
-      if (event.origin !== process.env.EXPO_PUBLIC_PROXY_BASE_URL) {
+      if (!process.env.EXPO_PUBLIC_PROXY_BASE_URL || event.origin !== process.env.EXPO_PUBLIC_PROXY_BASE_URL) {
         return;
       }
       if (event.data.type === 'AUTH_SUCCESS') {
@@ -78,10 +78,10 @@ export const AuthWebView = ({ mode, proxyURL, baseURL }) => {
         uri: currentURI,
       }}
       headers={{
-        'x-createxyz-project-group-id': process.env.EXPO_PUBLIC_PROJECT_GROUP_ID,
-        host: process.env.EXPO_PUBLIC_HOST,
-        'x-forwarded-host': process.env.EXPO_PUBLIC_HOST,
-        'x-createxyz-host': process.env.EXPO_PUBLIC_HOST,
+        'x-createxyz-project-group-id': process.env.EXPO_PUBLIC_PROJECT_GROUP_ID || '',
+        host: process.env.EXPO_PUBLIC_HOST || '',
+        'x-forwarded-host': process.env.EXPO_PUBLIC_HOST || '',
+        'x-createxyz-host': process.env.EXPO_PUBLIC_HOST || '',
       }}
       onShouldStartLoadWithRequest={(request) => {
         if (request.url === `${baseURL}${callbackUrl}`) {

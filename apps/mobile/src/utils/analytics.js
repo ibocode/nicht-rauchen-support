@@ -53,8 +53,13 @@ class AnalyticsService {
     try {
       const data = await AsyncStorage.getItem(ANALYTICS_STORAGE_KEY);
       if (data) {
-        const parsed = JSON.parse(data);
-        this.userId = parsed.userId || null;
+        try {
+          const parsed = JSON.parse(data);
+          this.userId = parsed.userId || null;
+        } catch (parseError) {
+          console.error('Failed to parse analytics data, corrupted:', parseError);
+          this.userId = null;
+        }
       }
     } catch (error) {
       console.error('Failed to load analytics data:', error);

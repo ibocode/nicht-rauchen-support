@@ -6,12 +6,17 @@ import {
   Animated,
   Modal,
   Dimensions,
+  StyleSheet,
+  Platform,
+  Easing
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle, Path, Defs, RadialGradient, Stop } from 'react-native-svg';
 import {
   useFonts,
   Poppins_400Regular,
@@ -22,9 +27,12 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { quitData } from '@/utils/quitData';
+import { notificationService } from '@/utils/notifications';
+import { shouldShowAppReview } from '@/utils/storeReview';
+import { AppReviewModal } from '@/components/AppReviewModal';
+import { PALETTE, SPACING, RADIUS } from '@/constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,9 +47,125 @@ const motivationalQuotes = [
   'Dein Körper dankt dir.',
 ];
 
+// --- Artistic Elements ---
+
+// Ein einzelnes schwebendes Teilchen (Blütenblatt / Partikel)
+const FloatingParticle = ({ delay = 0, duration = 4000, size = 20, startX, startY, color }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: duration,
+          easing: Easing.inOut(Easing.sin), // Organische Bewegung
+          useNativeDriver: true,
+          delay: delay,
+        }),
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: duration,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        })
+      ])
+    ).start();
+  }, []);
+
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -40] // Schwebt nach oben
+  });
+
+  const translateX = anim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, 20, 0] // Schwingt seitlich
+  });
+
+  const opacity = anim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.4, 0.8, 0.4] // Pulsierende Transparenz
+  });
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: startX,
+        top: startY,
+        transform: [{ translateY }, { translateX }],
+        opacity
+      }}
+    >
+       {/* Abstraktes Blütenblatt / Organische Form */}
+       <Svg width={size} height={size} viewBox="0 0 24 24">
+         <Path 
+           d="M12 2C12 2 14 8 18 10C22 12 22 14 18 16C14 18 12 22 12 22C12 22 10 18 6 16C2 14 2 12 6 10C10 8 12 2 12 2Z" 
+           fill={color} 
+           opacity={0.6}
+         />
+       </Svg>
+    </Animated.View>
+  );
+};
+
+const BackgroundArt = ({ theme, intensity }) => {
+  // Erzeugt eine lebendige, aber ruhige Atmosphäre
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {/* Wir platzieren zufällige Partikel im Hintergrund */}
+      <FloatingParticle startX="10%" startY="20%" size={30} color={theme.primary} delay={0} duration={6000} />
+      <FloatingParticle startX="80%" startY="15%" size={24} color={theme.success} delay={1000} duration={7000} />
+      <FloatingParticle startX="30%" startY="40%" size={15} color={theme.primary} delay={2500} duration={5500} />
+      <FloatingParticle startX="70%" startY="60%" size={35} color={theme.success} delay={500} duration={8000} />
+      <FloatingParticle startX="15%" startY="75%" size={20} color={theme.primary} delay={3000} duration={6500} />
+      <FloatingParticle startX="85%" startY="85%" size={25} color={theme.money} delay={1500} duration={7500} />
+      
+      {/* Großer, weicher Gradient Spot oben rechts für Lichtstimmung */}
+      <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id="grad" cx="80%" cy="10%" rx="60%" ry="40%" fx="80%" fy="10%" gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor={theme.primary} stopOpacity="0.15" />
+            <Stop offset="1" stopColor={theme.background[0]} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx="80%" cy="10%" r="600" fill="url(#grad)" />
+      </Svg>
+    </View>
+  );
+};
+
+
+// Helper Component für Glass Cards
+const GlassCard = ({ children, style, intensity = 20, colors, onPress }) => {
+  const Container = onPress ? TouchableOpacity : View;
+  
+  return (
+    <Container 
+      onPress={onPress}
+      activeOpacity={onPress ? 0.8 : 1}
+      style={[{ 
+        backgroundColor: colors.surface, 
+        borderColor: colors.border, 
+        borderWidth: 1, 
+        borderRadius: RADIUS.m,
+        padding: SPACING.m
+      }, style]}
+    >
+      {children}
+    </Container>
+  );
+};
+
+import { FadeInView } from '@/components/FadeInView';
+import { GoldenWeekCard } from '@/components/GoldenWeekCard';
+import { GoldenWeekIntroModal } from '@/components/GoldenWeekIntroModal';
+
 export default function TodayScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // ... rest of imports/state ...
 
   const [todayStatus, setTodayStatus] = useState(null);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -51,25 +175,85 @@ export default function TodayScreen() {
   const [smokingPreferences, setSmokingPreferences] = useState({
     cigarettesPerDay: 20,
     pricePerPack: 6.50,
-    cigarettesPerPack: 20,
+    cigarettesPerPack: 20, // Default auf 20
   });
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
   const [weekData, setWeekData] = useState([]);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showCongratulations, setShowCongratulations] = useState(false);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false); // Neu für Korrektur
+  const [showGoldenWeekIntro, setShowGoldenWeekIntro] = useState(false); // NEW
 
+  const [showSOSModal, setShowSOSModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const breathingAnim = useRef(new Animated.Value(0)).current; // 0 to 1
+  const [breathingState, setBreathingState] = useState('Bereit?'); // Text status
+  const [cycleCount, setCycleCount] = useState(0);
+  const TOTAL_CYCLES = 8;
+  const [isFinished, setIsFinished] = useState(false);
+
+  // Restoration of accidentally deleted refs:
   const scaleAnimation = useRef(new Animated.Value(1)).current;
-  const pulseAnimation = useRef(new Animated.Value(0)).current;
-  const fadeAnimation = useRef(new Animated.Value(0)).current;
-  const pulseLoopRef = useRef(null);
-  const flameGlowAnimation = useRef(new Animated.Value(0)).current;
   const congratulationsScale = useRef(new Animated.Value(0)).current;
   const congratulationsOpacity = useRef(new Animated.Value(0)).current;
 
-  const numberScale = pulseAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.12],
-  });
+  const startBreathing = useCallback(() => {
+    setCycleCount(1);
+    setIsFinished(false);
+    setBreathingState('Einatmen');
+    breathingAnim.setValue(0);
+    runBreathingCycle();
+  }, []);
+
+  const runBreathingCycle = () => {
+      Animated.sequence([
+          Animated.timing(breathingAnim, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true }), // Ein
+          Animated.timing(breathingAnim, { toValue: 1, duration: 4000, useNativeDriver: true }), // Halten
+          Animated.timing(breathingAnim, { toValue: 0, duration: 4000, easing: Easing.linear, useNativeDriver: true }), // Aus
+      ]).start(({ finished }) => {
+          if (finished) {
+             setCycleCount(prev => {
+                 const next = prev + 1;
+                 if (next > TOTAL_CYCLES) {
+                     setIsFinished(true);
+                     return prev;
+                 }
+                 // Restart Loop
+                 runBreathingCycle();
+                 return next;
+             });
+          }
+      });
+  };
+
+  // Text Sync Effect - Reacts to Cycle Change to restart text timer
+  useEffect(() => {
+      if (showSOSModal && !isFinished && cycleCount > 0) {
+          setBreathingState('Einatmen (4s)');
+          
+          const t1 = setTimeout(() => setBreathingState('Halten (4s)'), 4000);
+          const t2 = setTimeout(() => setBreathingState('Ausatmen (4s)'), 8000);
+          
+          return () => {
+              clearTimeout(t1);
+              clearTimeout(t2);
+          };
+      }
+  }, [cycleCount, showSOSModal, isFinished]);
+
+  // Init/Reset when Modal opens
+  useEffect(() => {
+      if (showSOSModal) {
+          startBreathing();
+      } else {
+          breathingAnim.stopAnimation();
+          breathingAnim.setValue(0);
+          setIsFinished(false);
+          setCycleCount(0);
+      }
+  }, [showSOSModal]);
+
 
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
@@ -80,170 +264,51 @@ export default function TodayScreen() {
     Inter_700Bold,
   });
 
+  // Theme Selection
+  const theme = useMemo(() => darkModeEnabled ? PALETTE.dark : PALETTE.light, [darkModeEnabled]);
+
   useEffect(() => {
-    quitData.init();
-    
-    // Sanftere Flamme-Animation - langsamer und ruhiger
-    const flameLoop = Animated.loop(
-      Animated.sequence([
-        // Sanftes Flackern
-        Animated.timing(flameGlowAnimation, {
-          toValue: 0.4,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flameGlowAnimation, {
-          toValue: 0.8,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flameGlowAnimation, {
-          toValue: 0.3,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flameGlowAnimation, {
-          toValue: 1,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-        // Längere Pause
-        Animated.timing(flameGlowAnimation, {
-          toValue: 0.5,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flameGlowAnimation, {
-          toValue: 0.2,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flameGlowAnimation, {
-          toValue: 0.7,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flameGlowAnimation, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    flameLoop.start();
-    
-    return () => {
-      pulseLoopRef.current?.stop?.();
-      flameLoop.stop();
-    };
-  }, [flameGlowAnimation]);
+    quitData.init().catch(err => console.error('Failed to init quitData:', err));
+  }, []);
 
-  // Farben im Onboarding-Stil
-  const colors = useMemo(() => {
-    if (darkModeEnabled) {
-      return {
-        background: ['#0A0F0A', '#0F1A0F', '#0A0F0A'],
-        cardBackground: 'rgba(255, 255, 255, 0.05)',
-        cardBorder: 'rgba(255, 255, 255, 0.1)',
-        textPrimary: '#FFFFFF',
-        textSecondary: '#A1A1AA',
-        success: '#10B981',
-        successBg: 'rgba(16, 185, 129, 0.1)',
-        error: '#EF4444',
-        errorBg: 'rgba(239, 68, 68, 0.1)',
-        money: '#F59E0B',
-        moneyBg: 'rgba(245, 158, 11, 0.1)',
-        flame: isSmokedToday ? '#EF4444' : '#10B981',
-        flameGlow: isSmokedToday ? '#EF4444' : '#10B981',
-        streakNumber: '#10B981',
-        streakText: '#A1A1AA',
-        weekTitle: '#A1A1AA',
-        weekDay: '#71717A',
-        weekToday: '#10B981',
-        weekSuccess: '#10B981',
-        weekSmoked: '#EF4444',
-        weekNeutral: 'rgba(255, 255, 255, 0.05)',
-        weekBorder: 'rgba(255, 255, 255, 0.1)',
-        primary: '#10B981',
-        buttonBg: 'rgba(255, 255, 255, 0.1)',
-        buttonBorder: 'rgba(255, 255, 255, 0.2)',
-      };
-    } else {
-      return {
-        background: ['#F8FAFC', '#F1F5F9', '#E2E8F0'],
-        cardBackground: '#FFFFFF',
-        cardBorder: '#E2E8F0',
-        textPrimary: '#1E293B',
-        textSecondary: '#64748B',
-        success: '#10B981',
-        successBg: '#ECFDF5',
-        error: '#EF4444',
-        errorBg: '#FEF2F2',
-        money: '#F59E0B',
-        moneyBg: '#FFFBEB',
-        flame: isSmokedToday ? '#EF4444' : '#10B981',
-        flameGlow: isSmokedToday ? '#EF4444' : '#10B981',
-        streakNumber: '#059669',
-        streakText: '#6B7280',
-        weekTitle: '#6B7280',
-        weekDay: '#9CA3AF',
-        weekToday: '#6B7280',
-        weekSuccess: '#10B981',
-        weekSmoked: '#EF4444',
-        weekNeutral: '#F3F4F6',
-        weekBorder: '#D1D5DB',
-        primary: '#10B981',
-        buttonBg: '#F3F4F6',
-        buttonBorder: '#D1D5DB',
-      };
-    }
-  }, [darkModeEnabled, isSmokedToday]);
-
+  // Logic: Berechnungen & Data Loading
   const calculateCigarettesNotSmoked = useCallback(() => {
     return currentStreak * smokingPreferences.cigarettesPerDay;
   }, [currentStreak, smokingPreferences.cigarettesPerDay]);
 
+  // NEU: Berechne Lebenszeit (in Stunden)
+  const calculateLifeRegained = useCallback(() => {
+    const cigs = calculateCigarettesNotSmoked();
+    const minutesSaved = cigs * 11; // 11 Minuten pro Zigarette
+    return Math.floor(minutesSaved / 60); // In Stunden
+  }, [calculateCigarettesNotSmoked]);
+
   const calculateMoneySaved = useCallback(() => {
-    const cigarettesPerPack = smokingPreferences.cigarettesPerPack;
+    const cigarettesPerPack = smokingPreferences.cigarettesPerPack || 20; // Fallback
     const pricePerPack = smokingPreferences.pricePerPack;
     const cigarettesPerDay = smokingPreferences.cigarettesPerDay;
-    
     const totalCigarettes = currentStreak * cigarettesPerDay;
     const packsNotSmoked = totalCigarettes / cigarettesPerPack;
     const moneySaved = packsNotSmoked * pricePerPack;
-    
-    return Math.floor(moneySaved);
+    return Math.floor(moneySaved); // Floor for clean UI
   }, [currentStreak, smokingPreferences]);
-
-  const calculateHealthImprovement = useCallback(() => {
-    // Basierend auf medizinischen Studien:
-    // Nach 24h: Herzfrequenz und Blutdruck normalisieren sich
-    // Nach 1 Woche: Sauerstoffgehalt im Blut steigt
-    // Nach 1 Monat: Lungenfunktion verbessert sich um 30%
-    // Nach 3 Monaten: Kreislauf verbessert sich deutlich
-    
-    if (currentStreak < 1) return 0;
-    if (currentStreak < 7) return Math.min(15, currentStreak * 2); // Bis 15% in der ersten Woche
-    if (currentStreak < 30) return Math.min(30, 15 + (currentStreak - 7) * 0.7); // Bis 30% im ersten Monat
-    return Math.min(50, 30 + (currentStreak - 30) * 0.3); // Bis 50% danach
-  }, [currentStreak]);
 
   const loadWeekData = useCallback(async () => {
     try {
       const today = new Date();
-      const currentDayOfWeek = (today.getDay() + 6) % 7; // Montag = 0
-      
-      // Berechne Montag der aktuellen Woche
+      const currentDayOfWeek = (today.getDay() + 6) % 7; 
       const mondayDate = new Date(today);
       mondayDate.setDate(today.getDate() - currentDayOfWeek);
-      
       const weekDays = [];
       
-      // Lade Daten für alle 7 Tage der Woche
       for (let i = 0; i < 7; i++) {
         const targetDate = new Date(mondayDate);
         targetDate.setDate(mondayDate.getDate() + i);
-        const dateStr = targetDate.toISOString().split('T')[0];
+        // Use local date instead of UTC
+        const year = targetDate.getFullYear();
+        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const day = String(targetDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
         
         try {
           const dayStatus = await quitData.getDayStatus(dateStr);
@@ -255,7 +320,6 @@ export default function TodayScreen() {
             dayName: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][i],
           });
         } catch (error) {
-          // Wenn kein Status gefunden, setze auf null
           weekDays.push({
             date: targetDate,
             dateStr: dateStr,
@@ -265,7 +329,6 @@ export default function TodayScreen() {
           });
         }
       }
-      
       setWeekData(weekDays);
     } catch (error) {
       console.error('Error loading week data:', error);
@@ -274,6 +337,7 @@ export default function TodayScreen() {
 
   const loadData = useCallback(async () => {
     try {
+      setIsLoading(true);
       const [status, streak, settings] = await Promise.all([
         quitData.getDayStatus(),
         quitData.getCurrentStreak(),
@@ -282,16 +346,19 @@ export default function TodayScreen() {
 
       setTodayStatus(status);
       setCurrentStreak(streak);
-      
-      // Lade Rauchgewohnheiten
       setSmokingPreferences({
         cigarettesPerDay: settings.cigarettesPerDay || 20,
         pricePerPack: settings.pricePerPack || 6.50,
-        cigarettesPerPack: 20, // Feste Anzahl pro Schachtel
+        cigarettesPerPack: settings.cigarettesPerPack || 20, // Lade Packungsgröße
       });
-
-      // Lade Dunklen Modus
       setDarkModeEnabled(settings.darkModeEnabled !== false);
+
+      // Check Golden Week Intro
+      const goldenWeek = await quitData.getGoldenWeek();
+      if (!goldenWeek.introSeen && goldenWeek.status !== 'failed') {
+          // Add small delay for better UX
+          setTimeout(() => setShowGoldenWeekIntro(true), 1000);
+      }
 
       const today = new Date();
       const dateStr = today.toLocaleDateString('de-DE', {
@@ -311,143 +378,90 @@ export default function TodayScreen() {
       } else {
         setCurrentQuote('');
       }
-      
-      // Lade Wochen-Daten
       await loadWeekData();
     } catch (error) {
       console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
     }
   }, [loadWeekData]);
 
-  const fadeIn = useCallback(() => {
-    fadeAnimation.setValue(0);
-    Animated.timing(fadeAnimation, {
-      toValue: 1,
-      duration: 260,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnimation]);
-
   useFocusEffect(
     useCallback(() => {
-      fadeIn();
       loadData();
-    }, [fadeIn, loadData]),
+    }, [loadData]),
   );
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const triggerPulse = useCallback(() => {
-    pulseLoopRef.current?.stop?.();
-    pulseAnimation.setValue(0);
-    const pulseSequence = Animated.sequence([
-      Animated.timing(pulseAnimation, {
-        toValue: 1,
-        duration: 360,
-        useNativeDriver: true,
-      }),
-      Animated.timing(pulseAnimation, {
-        toValue: 0,
-        duration: 360,
-        useNativeDriver: true,
-      }),
-    ]);
-    const loop = Animated.loop(pulseSequence, { iterations: 2 });
-    pulseLoopRef.current = loop;
-    loop.start(() => pulseAnimation.setValue(0));
-  }, [pulseAnimation]);
-
-  const handleCheckIn = useCallback(async () => {
-    if (todayStatus === 'success') {
-      return;
-    }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-    Animated.sequence([
-      Animated.timing(scaleAnimation, {
-        toValue: 0.92,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnimation, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    const success = await quitData.checkInToday();
-    if (success) {
-      await loadData();
-      triggerPulse();
-    }
-  }, [loadData, scaleAnimation, todayStatus, triggerPulse]);
-
-  const handleMarkSmoked = useCallback(async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    const success = await quitData.markDayAsSmoked();
-    if (success) {
-      await loadData();
-    }
-  }, [loadData]);
-
-  const handleMarkSuccess = useCallback(async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const success = await quitData.setDayStatus(new Date(), 'success');
-    if (success) {
-      await loadData();
-    }
-  }, [loadData]);
-
-  const handleAbhakPress = useCallback(() => {
-    if (todayStatus === null) {
+  const handleCheckInPress = useCallback(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setShowQuestionModal(true);
+  }, []);
+  
+  const handleStatusCorrection = useCallback(() => {
+    if (todayStatus !== null) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setShowCorrectionModal(true);
     }
   }, [todayStatus]);
 
-  // Prüfe ob heute bereits ein Status gesetzt wurde
-  const hasCheckedInToday = todayStatus !== null;
+  const handleCorrectionConfirm = useCallback(async (newStatus) => {
+    setShowCorrectionModal(false);
+    
+    // Notification Logic
+    await notificationService.resolveLateReminder();
+
+    if (newStatus === 'smoked') {
+      await quitData.markDayAsSmoked();
+    } else {
+      await quitData.setDayStatus(new Date(), 'success');
+      
+      // Golden Week: Auto-complete if active and user is smoke-free
+      // completeGoldenDay is idempotent - safe to call multiple times
+      await quitData.completeGoldenDay();
+      
+      // Milestone Check
+      const currentStreak = await quitData.getCurrentStreak();
+      const nextDay = currentStreak + 1;
+      const milestones = [7, 14, 30, 60, 90, 180, 365];
+      if (milestones.includes(nextDay)) {
+          await notificationService.scheduleMilestoneReminder(nextDay);
+      }
+
+      // App Store Bewertung nach erstem Check-in (mit Verzögerung)
+      setTimeout(async () => {
+        const shouldShow = await shouldShowAppReview();
+        if (shouldShow) {
+          setShowReviewModal(true);
+        }
+      }, 3000);
+    }
+    await loadData();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [loadData]);
+
 
   const handleQuestionAnswer = useCallback(async (answer) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setShowQuestionModal(false);
     
+    // Notification Logic
+    await notificationService.resolveLateReminder();
+    
     if (answer === 'success') {
-      // Zeige Congratulations-Animation
       setShowCongratulations(true);
-      
-      // Starte Animation
       Animated.parallel([
-        Animated.spring(congratulationsScale, {
-          toValue: 1,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-        Animated.timing(congratulationsOpacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
+        Animated.spring(congratulationsScale, { toValue: 1, tension: 100, friction: 8, useNativeDriver: true }),
+        Animated.timing(congratulationsOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
 
-      // Nach 3 Sekunden Animation beenden
       setTimeout(() => {
         Animated.parallel([
-          Animated.timing(congratulationsScale, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(congratulationsOpacity, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
+          Animated.timing(congratulationsScale, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.timing(congratulationsOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
         ]).start(() => {
           setShowCongratulations(false);
           congratulationsScale.setValue(0);
@@ -455,805 +469,619 @@ export default function TodayScreen() {
         });
       }, 3000);
 
-      // Status setzen
       await quitData.setDayStatus(new Date(), 'success');
+      
+      // Golden Week: Auto-complete if active and user is smoke-free
+      // completeGoldenDay is idempotent - safe to call multiple times
+      await quitData.completeGoldenDay();
+      
+      // Milestone Check
+      const currentStreak = await quitData.getCurrentStreak();
+      const nextDay = currentStreak + 1;
+      const milestones = [7, 14, 30, 60, 90, 180, 365];
+      if (milestones.includes(nextDay)) {
+          await notificationService.scheduleMilestoneReminder(nextDay);
+      }
+
       await loadData();
+
+      // App Store Bewertung nach erstem Check-in (mit Verzögerung)
+      // Warte 3 Sekunden nach dem Check-in, damit der Nutzer die Gratulation sieht
+      setTimeout(async () => {
+        const shouldShow = await shouldShowAppReview();
+        if (shouldShow) {
+          setShowReviewModal(true);
+        }
+      }, 3000);
     } else {
-      // Geraucht markieren
       await quitData.markDayAsSmoked();
       await loadData();
     }
   }, [congratulationsScale, congratulationsOpacity, loadData]);
 
-  const quickActions = useMemo(
-    () => [
-      {
-        key: 'calendar',
-        icon: 'calendar-outline',
-        title: 'Kalender ansehen',
-        subtitle: 'Verlauf checken und motiviert bleiben.',
-        target: '/(tabs)/calendar',
-      },
-      {
-        key: 'streak',
-        icon: 'flame-outline',
-        title: 'Serien & Ziele',
-        subtitle: 'Meilensteine und Fortschritt ansehen.',
-        target: '/(tabs)/streak',
-      },
-      {
-        key: 'settings',
-        icon: 'settings-outline',
-        title: 'Einstellungen',
-        subtitle: 'Benachrichtigungen und Premium.',
-        target: '/(tabs)/settings',
-      },
-    ],
-    [],
-  );
+  // Derived State
+  const hasCheckedInToday = todayStatus !== null;
+  const isSmokedToday = todayStatus === 'smoked';
 
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0A0F0A' }}>
-        <LinearGradient
-          colors={['#0A0F0A', '#0F1A0F', '#0A0F0A']}
-          style={{ flex: 1 }}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-      </View>
-    );
+  if (!fontsLoaded || isLoading) {
+    return <View style={{ flex: 1, backgroundColor: theme.background[0] }} />;
   }
 
-  const isSmokedToday = todayStatus === 'smoked';
-  const numberColor = isSmokedToday ? '#FF5F6F' : colors.streakNumber;
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background[0] }}>
+    // WICHTIG: FadeInView wrapped den gesamten Screen-Inhalt für stabile Animation
+    <FadeInView style={{ flex: 1, backgroundColor: theme.background[0] }}>
+      {/* Statischer Hintergrund Gradient */}
       <LinearGradient
-        colors={colors.background}
-        style={{ flex: 1 }}
+        colors={theme.background}
+        style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-      >
+      />
+      
+      {/* Künstlerische Elemente im Hintergrund */}
+      <BackgroundArt theme={theme} />
+
       <StatusBar style={darkModeEnabled ? "light" : "dark"} />
 
-      <Animated.View style={{ flex: 1, opacity: fadeAnimation }}>
+      {/* SOS BUTTON */}
+      <TouchableOpacity
+        onPress={() => setShowSOSModal(true)}
+        style={{
+          position: 'absolute',
+          top: insets.top + 10, // Safe Area respected
+          right: 20,
+          backgroundColor: '#ef4444', // Signal Red
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+          borderRadius: 20,
+          zIndex: 999, // Always on top
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          shadowColor: '#ef4444',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 5
+        }}
+      >
+        <Ionicons name="medical" size={16} color="#fff" />
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#fff' }}>SOS</Text>
+      </TouchableOpacity>
+
+      <View 
+        style={{ 
+          flex: 1, 
+        }}
+      >
         <ScrollView
           contentContainerStyle={{
-            paddingTop: insets.top + 60,
-            paddingBottom: insets.bottom + 120,
-            paddingHorizontal: 20,
-            flexGrow: 1,
-            justifyContent: 'space-between',
+            paddingTop: insets.top + SPACING.l,
+            paddingBottom: insets.bottom + 100,
+            paddingHorizontal: SPACING.l,
           }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ alignItems: 'center', gap: 40, paddingTop: 60 }}>
-            <Text
-              style={{
-                fontSize: 16,
-                fontFamily: 'Poppins_600SemiBold',
-                color: '#8CA0C5',
-              }}
-            >
-              Aktuelle Serie
-            </Text>
+          {/* GOLDEN WEEK CHALLENGE (Top Priority) */}
+          <GoldenWeekCard />
 
-            <View style={{ alignItems: 'center', gap: 16 }}>
-              {/* Moderne animierte Flamme */}
-              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                {/* Äußerer Glow-Ring - kleiner */}
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    width: 80,
-                    height: 80,
-                    borderRadius: 40,
-                    backgroundColor: isSmokedToday ? '#EF4444' : colors.flameGlow,
-                    opacity: flameGlowAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.1, 0.3],
-                    }),
-                    transform: [
-                      {
-                        scale: flameGlowAnimation.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.9, 1.1],
-                        }),
-                      },
-                    ],
-                  }}
-                />
-                
-                {/* Mittlerer Glow-Ring - kleiner */}
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    width: 60,
-                    height: 60,
-                    borderRadius: 30,
-                    backgroundColor: isSmokedToday ? '#EF4444' : colors.flameGlow,
-                    opacity: flameGlowAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.2, 0.4],
-                    }),
-                    transform: [
-                      {
-                        scale: flameGlowAnimation.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.95, 1.05],
-                        }),
-                      },
-                    ],
-                  }}
-                />
-                
-                {/* Flamme Icon - kleiner */}
-                <Animated.View
-                  style={{
-                    transform: [
-                      {
-                        scale: flameGlowAnimation.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.98, 1.02],
-                        }),
-                      },
-                      {
-                        rotate: flameGlowAnimation.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['-0.5deg', '0.5deg'],
-                        }),
-                      },
-                    ],
-                    shadowColor: isSmokedToday ? '#EF4444' : colors.flameGlow,
-                    shadowOpacity: flameGlowAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.3, 0.6],
-                    }),
-                    shadowRadius: flameGlowAnimation.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [8, 15],
-                    }),
-                    shadowOffset: { width: 0, height: 4 },
-                    elevation: 10,
-                  }}
-                >
-                  <Text style={{ fontSize: 36, color: isSmokedToday ? '#EF4444' : colors.flame }}>🔥</Text>
-                </Animated.View>
-              </View>
-
-              {/* Animierte Zahl */}
-              <Animated.Text
-                style={{
-                  fontSize: 120,
-                  fontFamily: 'Inter_700Bold',
-                  color: numberColor,
-                  lineHeight: 140,
-                  transform: [{ scale: numberScale }],
-                  textAlign: 'center',
-                  includeFontPadding: false,
-                  textAlignVertical: 'center',
-                }}
-              >
-                {currentStreak}
-              </Animated.Text>
-
-              {/* Week Streak Text */}
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontFamily: 'Poppins_600SemiBold',
-                  color: colors.streakText,
-                  textAlign: 'center',
-                }}
-              >
-                {currentStreak === 1 ? 'Tag' : 'Tage'} in Folge rauchfrei
+          {/* HEADER SECTION */}
+          <View style={{ alignItems: 'center', marginBottom: SPACING.xxl }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.s }}>
+              <Ionicons name="leaf-outline" size={14} color={theme.primary} />
+              <Text style={{ 
+                fontFamily: 'Inter_600SemiBold', 
+                fontSize: 12, 
+                color: theme.primary, 
+                letterSpacing: 1.5,
+                textTransform: 'uppercase' 
+              }}>
+                Aktuelle Serie
               </Text>
-
-              {/* Wochen-Fortschritt */}
-              <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 24 }}>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontFamily: 'Poppins_400Regular',
-                    color: colors.weekTitle,
-                    marginBottom: 16,
-                  }}
-                >
-                  Diese Woche
-                </Text>
-                
-                <View style={{ 
-                  flexDirection: 'row', 
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  paddingHorizontal: 8,
-                }}>
-                  {weekData.map((day, index) => {
-                    // Bestimme die Farbe basierend auf dem echten Status
-                    let backgroundColor = colors.weekNeutral;
-                    let borderColor = colors.weekBorder;
-                    let textColor = colors.weekDay;
-                    let shadowColor = 'transparent';
-                    let elevation = 0;
-                    
-                    if (day.status === 'success') {
-                      backgroundColor = colors.weekSuccess;
-                      borderColor = colors.weekSuccess;
-                      textColor = darkModeEnabled ? '#062015' : '#FFFFFF';
-                      shadowColor = colors.weekSuccess;
-                      elevation = 4;
-                    } else if (day.status === 'smoked') {
-                      backgroundColor = colors.weekSmoked;
-                      borderColor = colors.weekSmoked;
-                      textColor = darkModeEnabled ? '#2B1424' : '#FFFFFF';
-                      shadowColor = colors.weekSmoked;
-                      elevation = 4;
-                    } else if (day.isToday) {
-                      backgroundColor = colors.weekToday;
-                      borderColor = colors.weekToday;
-                      textColor = darkModeEnabled ? '#1A2332' : '#FFFFFF';
-                      shadowColor = colors.weekToday;
-                      elevation = 4;
-                    }
-                    
-                    return (
-                      <View key={index} style={{ alignItems: 'center', gap: 3 }}>
-                        {/* Wochentag-Label */}
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontFamily: 'Poppins_600SemiBold',
-                            color: day.isToday ? colors.weekToday : colors.weekDay,
-                          }}
-                        >
-                          {day.dayName}
-                        </Text>
-                        
-                        {/* Status-Kreis */}
-                        <View
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 14,
-                            backgroundColor: backgroundColor,
-                            borderWidth: 2,
-                            borderColor: borderColor,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            shadowColor: shadowColor,
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            shadowOffset: { width: 0, height: 2 },
-                            elevation: elevation,
-                          }}
-                        >
-                          {day.status === 'success' && (
-                            <Text style={{ color: textColor, fontSize: 12, fontWeight: 'bold' }}>✓</Text>
-                          )}
-                          {day.status === 'smoked' && (
-                            <Text style={{ color: textColor, fontSize: 12, fontWeight: 'bold' }}>✗</Text>
-                          )}
-                          {!day.status && day.isToday && (
-                            <View
-                              style={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: 3,
-                                backgroundColor: '#FFFFFF',
-                              }}
-                            />
-                          )}
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-
+            </View>
+            
+                  {/* MAIN STREAK INDICATOR */}
+                   <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: SPACING.m, overflow: 'visible' }}>
+                     <Text style={{
+                       fontSize: 100,
+                       fontFamily: 'Inter_700Bold',
+                       color: isSmokedToday ? theme.error : theme.text,
+                       includeFontPadding: false,
+                       lineHeight: 110,
+                       textShadowColor: isSmokedToday ? theme.errorGlow : theme.primaryGlow,
+                       textShadowOffset: {width: 0, height: 0},
+                       textShadowRadius: 25,
+                       padding: 30, // WICHTIG: Gibt dem Schatten Platz innerhalb des Text-Elements
+                     }}>
+                       {currentStreak}
+                     </Text>
+              
+              <Text style={{ 
+                fontFamily: 'Inter_400Regular', 
+                fontSize: 16, 
+                color: theme.textSecondary,
+                marginTop: -SPACING.xs 
+              }}>
+                {currentStreak === 1 ? 'Tag Rauchfrei' : 'Tage Rauchfrei'}
+              </Text>
             </View>
           </View>
 
-          <View style={{ gap: 32 }}>
-            {/* Abhak-Knopf oder normale Buttons */}
-            {!hasCheckedInToday ? (
+          {/* ACTIONS */}
+          <View style={{ marginBottom: SPACING.xxl }}>
+              {!hasCheckedInToday ? (
               <Animated.View style={{ transform: [{ scale: scaleAnimation }] }}>
                 <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={handleAbhakPress}
-                  style={{
-                    borderRadius: 28,
-                    paddingVertical: 24,
-                    backgroundColor: colors.primary,
-                    borderWidth: 2,
-                    borderColor: colors.primary,
-                    shadowColor: colors.primary,
-                    shadowOpacity: 0.3,
-                    shadowRadius: 12,
-                    shadowOffset: { width: 0, height: 6 },
-                    elevation: 8,
-                  }}
+                  activeOpacity={0.9}
+                  onPress={handleCheckInPress}
                 >
-                  <Text
+                  <LinearGradient
+                    colors={[theme.primary, '#22c55e']} 
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                     style={{
-                      fontSize: 18,
-                      fontFamily: 'Poppins_600SemiBold',
-                      color: '#FFFFFF',
-                      textAlign: 'center',
-                    }}
-                  >
-                    ✓ Heute abhaken
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
-            ) : (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 16,
-                }}
-              >
-                <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnimation }] }}>
-                  <TouchableOpacity
-                    activeOpacity={0.88}
-                    onPress={handleMarkSuccess}
-                    disabled={todayStatus === 'success'}
-                    style={{
-                      borderRadius: 28,
-                      paddingVertical: 20,
-                      backgroundColor: todayStatus === 'success' ? colors.successBg : colors.buttonBg,
-                      borderWidth: 2,
-                      borderColor: todayStatus === 'success' ? colors.success : colors.buttonBorder,
-                      opacity: 1,
-                      shadowColor: todayStatus === 'success' ? colors.success : colors.buttonBorder,
+                      borderRadius: RADIUS.l,
+                      paddingVertical: SPACING.l,
+                      alignItems: 'center',
+                      shadowColor: theme.primary,
                       shadowOpacity: 0.3,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 4 },
+                      shadowRadius: 20,
+                      shadowOffset: { width: 0, height: 8 },
                       elevation: 8,
                     }}
                   >
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontFamily: 'Poppins_600SemiBold',
-                        color: todayStatus === 'success' ? colors.success : colors.textPrimary,
-                        textAlign: 'center',
-                      }}
-                    >
-                      {todayStatus === 'success' ? '✓ Nicht geraucht' : 'Nicht geraucht'}
+                    <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 18, color: '#FFFFFF' }}>
+                      Heute abhaken
                     </Text>
-                  </TouchableOpacity>
-                </Animated.View>
-
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={handleMarkSmoked}
-                  style={{
-                    flex: 1,
-                    borderRadius: 28,
-                    paddingVertical: 20,
-                    backgroundColor: todayStatus === 'success' ? colors.errorBg : colors.buttonBg,
-                    borderWidth: 2,
-                    borderColor: todayStatus === 'success' ? colors.error : colors.buttonBorder,
-                    opacity: todayStatus === 'success' ? 0.6 : 1,
-                    shadowColor: todayStatus === 'success' ? colors.error : colors.buttonBorder,
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    shadowOffset: { width: 0, height: 4 },
-                    elevation: 8,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontFamily: 'Poppins_600SemiBold',
-                      color: todayStatus === 'success' ? colors.textSecondary : colors.error,
-                      textAlign: 'center',
-                    }}
-                  >
-                    Geraucht
-                  </Text>
+                  </LinearGradient>
                 </TouchableOpacity>
-              </View>
+              </Animated.View>
+            ) : (
+                <TouchableOpacity 
+                  onPress={handleStatusCorrection}
+                  activeOpacity={0.7}
+                  style={{ 
+                    backgroundColor: todayStatus === 'success' ? theme.successGlow : 'rgba(239, 68, 68, 0.1)',
+                    borderColor: todayStatus === 'success' ? theme.success : theme.error,
+                    borderWidth: 1,
+                    borderRadius: RADIUS.l,
+                    padding: SPACING.m,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8
+                  }}>
+                    <Ionicons 
+                      name={todayStatus === 'success' ? "checkmark-circle" : "alert-circle"} 
+                      size={20} 
+                      color={todayStatus === 'success' ? theme.success : theme.error} 
+                    />
+                    <Text style={{ 
+                      fontFamily: 'Poppins_600SemiBold', 
+                      fontSize: 16, 
+                      color: todayStatus === 'success' ? theme.success : theme.error 
+                    }}>
+                      {todayStatus === 'success' ? 'Heute rauchfrei' : 'Heute geraucht'}
+                    </Text>
+                    <Ionicons name="pencil" size={14} color={theme.textMuted} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+                  </TouchableOpacity>
             )}
+          </View>
 
-            {/* Professionelle Statistiken */}
-            <View style={{ gap: 16 }}>
-              <View
-                style={{
-                  backgroundColor: colors.cardBackground,
-                  borderRadius: 20,
-                  padding: 20,
-                  borderWidth: 1,
-                  borderColor: colors.cardBorder,
-                  shadowColor: colors.cardBorder,
-                  shadowOpacity: 0.15,
-                  shadowRadius: 8,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 6,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontFamily: 'Poppins_600SemiBold',
-                    color: colors.textPrimary,
-                    marginBottom: 16,
-                    textAlign: 'center',
-                  }}
-                >
-                  Heutiger Fortschritt
-                </Text>
-                
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <View
-                      style={{
-                        width: 60,
-                        height: 60,
-                        borderRadius: 30,
-                        backgroundColor: colors.successBg,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 28, color: colors.success }}>🚭</Text>
-                    </View>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      Nicht geraucht
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontFamily: 'Poppins_600SemiBold',
-                        color: colors.textPrimary,
-                      }}
-                    >
-                      {calculateCigarettesNotSmoked()}
-                    </Text>
-                  </View>
+          {/* WEEKLY OVERVIEW */}
+          <View style={{ marginBottom: SPACING.xl }}>
+            <Text style={{ 
+              fontFamily: 'Inter_600SemiBold', 
+              fontSize: 14, 
+              color: theme.textMuted, 
+              marginBottom: SPACING.m,
+              marginLeft: SPACING.xs
+            }}>
+              DIESE WOCHE
+            </Text>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              backgroundColor: theme.surface, 
+              borderRadius: RADIUS.m,
+              padding: SPACING.l,
+              borderWidth: 1,
+              borderColor: theme.border
+            }}>
+              {weekData.map((day, index) => {
+                  const isSuccess = day.status === 'success';
+                  const isSmoked = day.status === 'smoked';
                   
-                  <View style={{ alignItems: 'center' }}>
-                    <View
-                      style={{
-                        width: 60,
-                        height: 60,
-                        borderRadius: 30,
-                        backgroundColor: colors.moneyBg,
-                        justifyContent: 'center',
+                  return (
+                    <View key={index} style={{ alignItems: 'center', gap: 8 }}>
+                      <Text style={{ 
+                        fontFamily: 'Inter_600SemiBold', 
+                        fontSize: 11, 
+                        color: day.isToday ? theme.text : theme.textMuted 
+                      }}>
+                        {day.dayName}
+                      </Text>
+                      <View style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: isSuccess ? theme.success : isSmoked ? theme.error : 'transparent',
+                        borderWidth: isSuccess || isSmoked ? 0 : 1,
+                        borderColor: day.isToday ? theme.text : theme.border,
                         alignItems: 'center',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Text style={{ fontSize: 28, color: colors.money }}>💰</Text>
+                        justifyContent: 'center'
+                      }}>
+                        {isSuccess && <Ionicons name="checkmark" size={18} color="#fff" />}
+                        {isSmoked && <Ionicons name="close" size={18} color="#fff" />}
+                      </View>
                     </View>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      Geld gespart
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontFamily: 'Poppins_600SemiBold',
-                        color: colors.textPrimary,
-                      }}
-                    >
-                      {calculateMoneySaved()}€
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Nächster Meilenstein */}
-              <View
-                style={{
-                  backgroundColor: colors.cardBackground,
-                  borderRadius: 20,
-                  padding: 20,
-                  borderWidth: 1,
-                  borderColor: colors.cardBorder,
-                  shadowColor: colors.cardBorder,
-                  shadowOpacity: 0.15,
-                  shadowRadius: 8,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 6,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontFamily: 'Poppins_600SemiBold',
-                    color: colors.textPrimary,
-                    marginBottom: 12,
-                    textAlign: 'center',
-                  }}
-                >
-                  Nächster Meilenstein
-                </Text>
-                
-                {currentStreak < 7 ? (
-                  <View style={{ alignItems: 'center' }}>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.textSecondary,
-                        marginBottom: 8,
-                      }}
-                    >
-                      Erste Woche rauchfrei
-                    </Text>
-                    <View
-                      style={{
-                        width: '100%',
-                        height: 12,
-                        backgroundColor: colors.weekNeutral,
-                        borderRadius: 6,
-                        overflow: 'hidden',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <View
-                        style={{
-                          height: '100%',
-                          width: `${(currentStreak / 7) * 100}%`,
-                          backgroundColor: colors.success,
-                          borderRadius: 6,
-                        }}
-                      />
-                    </View>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      {7 - currentStreak} Tage bis zur ersten Woche
-                    </Text>
-                  </View>
-                ) : currentStreak < 30 ? (
-                  <View style={{ alignItems: 'center' }}>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.textSecondary,
-                        marginBottom: 8,
-                      }}
-                    >
-                      Erster Monat rauchfrei
-                    </Text>
-                    <View
-                      style={{
-                        width: '100%',
-                        height: 12,
-                        backgroundColor: colors.weekNeutral,
-                        borderRadius: 6,
-                        overflow: 'hidden',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <View
-                        style={{
-                          height: '100%',
-                          width: `${(currentStreak / 30) * 100}%`,
-                          backgroundColor: '#53FF94',
-                          borderRadius: 6,
-                        }}
-                      />
-                    </View>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      {30 - currentStreak} Tage bis zum ersten Monat
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ alignItems: 'center' }}>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.success,
-                        marginBottom: 8,
-                      }}
-                    >
-                      🎉 Großartig! Du hast bereits einen Monat geschafft!
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontFamily: 'Poppins_400Regular',
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      Weiter so! Dein nächster Meilenstein ist 100 Tage.
-                    </Text>
-                  </View>
-                )}
-              </View>
+                  );
+              })}
             </View>
           </View>
-        </ScrollView>
-      </Animated.View>
 
-      {/* Frage-Modal */}
+          {/* STATS GRID */}
+          {/* 2-Spalten Layout für die Stats */}
+          <View style={{ flexDirection: 'row', gap: SPACING.m, marginBottom: SPACING.xl }}>
+              {/* 1. Karte: Lebenszeit */}
+              <GlassCard style={{ flex: 1 }} colors={theme}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <View style={{ padding: 6, backgroundColor: theme.successGlow, borderRadius: 8 }}>
+                    <Ionicons name="hourglass-outline" size={18} color={theme.success} />
+                  </View>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: theme.textMuted }}>Leben</Text>
+                </View>
+                <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 22, color: theme.text }}>
+                  +{calculateLifeRegained()}
+                </Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.textSecondary }}>
+                  Stunden gewonnen
+                </Text>
+              </GlassCard>
+
+              {/* 2. Karte: Geld (Präzise) */}
+              <GlassCard style={{ flex: 1 }} colors={theme}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <View style={{ padding: 6, backgroundColor: 'rgba(251, 191, 36, 0.15)', borderRadius: 8 }}>
+                    <Ionicons name="wallet-outline" size={18} color={theme.moneyClassic} />
+                  </View>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: theme.textMuted }}>Geld</Text>
+                </View>
+                <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 22, color: theme.text }}>
+                  {calculateMoneySaved()}€
+                </Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.textSecondary }}>
+                  Gespart (präzise)
+                </Text>
+              </GlassCard>
+          </View>
+
+          {/* 3. Reihe: Zigaretten vermieden */}
+           <GlassCard style={{ marginBottom: SPACING.xl }} colors={theme}>
+               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.m }}>
+                    <View style={{ padding: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10 }}>
+                      <Ionicons name="skull-outline" size={20} color={theme.textMuted} />
+                    </View>
+                    <View>
+                      <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 16, color: theme.text }}>
+                        {calculateCigarettesNotSmoked()} Zigaretten
+                      </Text>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.textSecondary }}>
+                        Nicht geraucht
+                      </Text>
+                    </View>
+                  </View>
+               </View>
+           </GlassCard>
+
+
+          {/* NEXT MILESTONE */}
+          <GlassCard colors={theme}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.s }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: theme.text }}>Nächster Meilenstein</Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: theme.primary }}>
+                  {currentStreak < 7 ? '7 Tage' : currentStreak < 30 ? '30 Tage' : '100 Tage'}
+                </Text>
+              </View>
+              
+              {/* Progress Bar */}
+              <View style={{ 
+                height: 8, 
+                backgroundColor: theme.surfaceHighlight, 
+                borderRadius: 4, 
+                overflow: 'hidden',
+                marginBottom: SPACING.s 
+              }}>
+                <View style={{ 
+                  width: `${Math.min(100, (currentStreak / (currentStreak < 7 ? 7 : currentStreak < 30 ? 30 : 100)) * 100)}%`,
+                  height: '100%',
+                  backgroundColor: theme.primary,
+                  borderRadius: 4
+                }} />
+              </View>
+              
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.textMuted }}>
+                Weiter so! Du bist auf dem besten Weg.
+              </Text>
+          </GlassCard>
+
+        </ScrollView>
+      </View>
+
+      {/* MODALS */}
+      
+      {/* 1. Frage Modal (Check-In) */}
       <Modal
         visible={showQuestionModal}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setShowQuestionModal(false)}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: '#000000',
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-        }}>
-          <View style={{
-            backgroundColor: colors.cardBackground,
-            borderRadius: 24,
-            padding: 32,
-            borderWidth: 2,
-            borderColor: colors.cardBorder,
-            width: '100%',
-            maxWidth: 340,
-            shadowColor: '#000',
-            shadowOpacity: 0.8,
-            shadowRadius: 25,
-            shadowOffset: { width: 0, height: 15 },
-            elevation: 25,
-          }}>
-            <Text style={{
-              fontSize: 24,
-              fontFamily: 'Poppins_700Bold',
-              color: colors.textPrimary,
-              textAlign: 'center',
-              marginBottom: 16,
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ 
+              backgroundColor: theme.background[1],
+              borderRadius: RADIUS.l,
+              padding: SPACING.xl,
+              width: '100%',
+              maxWidth: 340,
+              borderWidth: 1,
+              borderColor: theme.border
             }}>
-              Hast du heute geraucht?
-            </Text>
-            
-            <Text style={{
-              fontSize: 16,
-              fontFamily: 'Poppins_400Regular',
-              color: colors.textSecondary,
-              textAlign: 'center',
-              marginBottom: 32,
-              lineHeight: 24,
-            }}>
-              Sei ehrlich mit dir selbst. Jeder Tag zählt!
-            </Text>
-
-            <View style={{ gap: 16 }}>
-              <TouchableOpacity
-                onPress={() => handleQuestionAnswer('success')}
-                style={{
-                  backgroundColor: colors.success,
-                  borderRadius: 16,
-                  paddingVertical: 18,
-                  alignItems: 'center',
-                  shadowColor: colors.success,
-                  shadowOpacity: 0.3,
-                  shadowRadius: 12,
-                  shadowOffset: { width: 0, height: 6 },
-                  elevation: 8,
-                }}
-              >
-                <Text style={{
-                  fontSize: 18,
-                  fontFamily: 'Poppins_600SemiBold',
-                  color: '#FFFFFF',
-                }}>
-                  ✓ Nicht geraucht
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => handleQuestionAnswer('smoked')}
-                style={{
-                  backgroundColor: colors.error,
-                  borderRadius: 16,
-                  paddingVertical: 18,
-                  alignItems: 'center',
-                  shadowColor: colors.error,
-                  shadowOpacity: 0.3,
-                  shadowRadius: 12,
-                  shadowOffset: { width: 0, height: 6 },
-                  elevation: 8,
-                }}
-              >
-                <Text style={{
-                  fontSize: 18,
-                  fontFamily: 'Poppins_600SemiBold',
-                  color: '#FFFFFF',
-                }}>
-                  ✗ Geraucht
-                </Text>
-              </TouchableOpacity>
+              <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 24, color: theme.text, textAlign: 'center', marginBottom: SPACING.s }}>
+                Ehrlichkeit zählt.
+              </Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: theme.textSecondary, textAlign: 'center', marginBottom: SPACING.xl }}>
+                Hast du heute geraucht?
+              </Text>
+              
+              <View style={{ gap: SPACING.m }}>
+                <TouchableOpacity 
+                  onPress={() => handleQuestionAnswer('success')}
+                  style={{ backgroundColor: theme.success, padding: SPACING.m, borderRadius: RADIUS.m, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontFamily: 'Poppins_600SemiBold', fontSize: 16 }}>Nein, ich war stark</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  onPress={() => handleQuestionAnswer('smoked')}
+                  style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.error, padding: SPACING.m, borderRadius: RADIUS.m, alignItems: 'center' }}
+                >
+                    <Text style={{ color: theme.error, fontFamily: 'Poppins_600SemiBold', fontSize: 16 }}>Ja, leider</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
         </View>
       </Modal>
+      
+      {/* 2. Korrektur Modal */}
+      <Modal
+        visible={showCorrectionModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCorrectionModal(false)}
+      >
+        <TouchableOpacity 
+          activeOpacity={1}
+          onPress={() => setShowCorrectionModal(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+        >
+           <View style={{ 
+             backgroundColor: theme.background[1],
+             borderTopLeftRadius: RADIUS.l,
+             borderTopRightRadius: RADIUS.l,
+             padding: SPACING.xl,
+             paddingBottom: insets.bottom + SPACING.l,
+             borderWidth: 1,
+             borderColor: theme.border
+           }}>
+             <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 18, color: theme.text, marginBottom: SPACING.l, textAlign: 'center' }}>
+               Eintrag korrigieren
+             </Text>
+             
+             {todayStatus === 'success' ? (
+                <TouchableOpacity 
+                  onPress={() => handleCorrectionConfirm('smoked')}
+                  style={{ 
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                    borderColor: theme.error,
+                    borderWidth: 1,
+                    padding: SPACING.m, 
+                    borderRadius: RADIUS.m, 
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 8
+                  }}
+                >
+                  <Ionicons name="alert-circle" size={20} color={theme.error} />
+                  <Text style={{ color: theme.error, fontFamily: 'Poppins_600SemiBold', fontSize: 16 }}>
+                    Ich habe doch geraucht
+                  </Text>
+                </TouchableOpacity>
+             ) : (
+                <TouchableOpacity 
+                  onPress={() => handleCorrectionConfirm('success')}
+                  style={{ 
+                    backgroundColor: theme.successGlow,
+                    borderColor: theme.success,
+                    borderWidth: 1,
+                    padding: SPACING.m, 
+                    borderRadius: RADIUS.m, 
+                    alignItems: 'center', 
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 8
+                  }}
+                >
+                   <Ionicons name="checkmark-circle" size={20} color={theme.success} />
+                   <Text style={{ color: theme.success, fontFamily: 'Poppins_600SemiBold', fontSize: 16 }}>
+                     Ich war doch rauchfrei
+                   </Text>
+                </TouchableOpacity>
+             )}
+             
+             <TouchableOpacity 
+               onPress={() => setShowCorrectionModal(false)}
+               style={{ marginTop: SPACING.m, padding: SPACING.s, alignItems: 'center' }}
+             >
+               <Text style={{ color: theme.textSecondary, fontFamily: 'Inter_600SemiBold' }}>Abbrechen</Text>
+             </TouchableOpacity>
+           </View>
+        </TouchableOpacity>
+      </Modal>
 
-      {/* Congratulations-Animation */}
+      {/* 3. Gratulations Overlay */}
       {showCongratulations && (
         <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#000000',
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.9)',
+          zIndex: 1000 // Ensure it's on top
         }}>
-          <Animated.View style={{
-            transform: [{ scale: congratulationsScale }],
-            opacity: congratulationsOpacity,
-            alignItems: 'center',
-          }}>
-            <View style={{
-              backgroundColor: colors.success,
-              borderRadius: 24,
-              padding: 40,
-              alignItems: 'center',
-              shadowColor: colors.success,
-              shadowOpacity: 1,
-              shadowRadius: 30,
-              shadowOffset: { width: 0, height: 20 },
-              elevation: 30,
-              borderWidth: 3,
-              borderColor: '#FFFFFF',
-            }}>
-              <Text style={{
-                fontSize: 80,
-                marginBottom: 20,
+          <Animated.View style={{ transform: [{ scale: congratulationsScale }], opacity: congratulationsOpacity }}>
+              <View style={{ 
+                backgroundColor: theme.success, 
+                padding: SPACING.xxl, 
+                borderRadius: 40, // Stark abgerundet
+                alignItems: 'center',
+                shadowColor: theme.success, 
+                shadowOpacity: 0.6, 
+                shadowRadius: 50,
+                elevation: 30,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.2)'
               }}>
-                🎉
-              </Text>
-              <Text style={{
-                fontSize: 28,
-                fontFamily: 'Poppins_700Bold',
-                color: '#FFFFFF',
-                textAlign: 'center',
-                marginBottom: 12,
-              }}>
-                Gratulation!
-              </Text>
-              <Text style={{
-                fontSize: 18,
-                fontFamily: 'Poppins_600SemiBold',
-                color: '#FFFFFF',
-                textAlign: 'center',
-                opacity: 1,
-              }}>
-                Du hast heute nicht geraucht!
-              </Text>
-            </View>
+                <Text style={{ fontSize: 60, marginBottom: SPACING.m }}>🎉</Text>
+                <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 24, color: '#fff' }}>Starke Leistung!</Text>
+              </View>
           </Animated.View>
         </View>
       )}
-      </LinearGradient>
-    </View>
+
+      {/* App Review Modal */}
+      <AppReviewModal
+        visible={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        onReview={() => {
+          // Optional: Analytics oder andere Aktionen nach Bewertung
+        }}
+      />
+
+      {/* 4. SOS Breathing Modal */}
+      <Modal
+        visible={showSOSModal}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowSOSModal(false)}
+      >
+         <View style={{ flex: 1, backgroundColor: '#101512', justifyContent: 'center', alignItems: 'center' }}>
+            <StatusBar style="light" />
+            
+            <TouchableOpacity 
+              onPress={() => setShowSOSModal(false)}
+              style={{ position: 'absolute', top: 60, right: 30, padding: 10, zIndex: 10 }}
+            >
+               <Ionicons name="close" size={32} color="#fff" opacity={0.5} />
+            </TouchableOpacity>
+
+            {!isFinished ? (
+                <>
+                    <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 22, color: '#4ade80', marginBottom: 60, letterSpacing: 2 }}>
+                      NOTFALL HILFE
+                    </Text>
+
+                    {/* Breathing Circle */}
+                    <View style={{ height: 300, justifyContent: 'center', alignItems: 'center', marginBottom: 40 }}>
+                       {/* Outer Glow */}
+                       <Animated.View style={{
+                         width: 250,
+                         height: 250,
+                         borderRadius: 125,
+                         backgroundColor: '#4ade80',
+                         opacity: 0.2,
+                         transform: [{ scale: breathingAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.4] }) }]
+                       }} />
+                       
+                       {/* Inner Circle */}
+                       <Animated.View style={{
+                         position: 'absolute',
+                         width: 200,
+                         height: 200,
+                         borderRadius: 100,
+                         backgroundColor: '#22c55e',
+                         justifyContent: 'center',
+                         alignItems: 'center',
+                         shadowColor: "#4ade80",
+                         shadowOffset: { width: 0, height: 0 },
+                         shadowOpacity: 0.8,
+                         shadowRadius: 30,
+                         elevation: 20,
+                         transform: [{ scale: breathingAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] }) }]
+                       }}>
+                         <Ionicons name="leaf" size={60} color="#fff" />
+                       </Animated.View>
+                    </View>
+
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 32, color: '#fff', marginBottom: 10 }}>
+                       {breathingState}
+                    </Text>
+                    
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#4ade80', marginBottom: 30 }}>
+                       Runde {Math.min(cycleCount, TOTAL_CYCLES)} von {TOTAL_CYCLES}
+                    </Text>
+                    
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: '#ffffff80', textAlign: 'center', paddingHorizontal: 40 }}>
+                       Fokussiere dich nur auf deinen Atem. Das Verlangen geht vorbei.
+                    </Text>
+                </>
+            ) : (
+                <View style={{ alignItems: 'center', paddingHorizontal: 30 }}>
+                    <View style={{ 
+                        width: 120, height: 120, borderRadius: 60, 
+                        backgroundColor: 'rgba(74, 222, 128, 0.1)', 
+                        justifyContent: 'center', alignItems: 'center', marginBottom: 30,
+                        borderWidth: 2, borderColor: '#4ade80'
+                    }}>
+                        <Ionicons name="checkmark" size={60} color="#4ade80" />
+                    </View>
+                    
+                    <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 32, color: '#fff', marginBottom: 16, textAlign: 'center' }}>
+                        Welle überstanden.
+                    </Text>
+                    
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: '#ffffff90', textAlign: 'center', marginBottom: 60, lineHeight: 24 }}>
+                        Du hast die Kontrolle behalten. Dein Körper dankt dir für diese Ruhepause.
+                    </Text>
+                    
+                    <TouchableOpacity 
+                        onPress={() => setShowSOSModal(false)}
+                        style={{ 
+                            backgroundColor: '#4ade80', 
+                            paddingHorizontal: 40, 
+                            paddingVertical: 16, 
+                            borderRadius: 30,
+                            shadowColor: '#4ade80',
+                            shadowOpacity: 0.3,
+                            shadowRadius: 20,
+                            shadowOffset: { width: 0, height: 4 }
+                        }}
+                    >
+                        <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 18, color: '#064e3b' }}>
+                            Zurück zur App
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+         </View>
+      </Modal>
+
+      {/* 5. Golden Week Intro Modal */}
+      <GoldenWeekIntroModal 
+        visible={showGoldenWeekIntro} 
+        onClose={() => setShowGoldenWeekIntro(false)} 
+      />
+
+    </FadeInView>
   );
 }

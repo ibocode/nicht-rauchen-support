@@ -17,9 +17,12 @@ const ALLOWED_MIME_TYPES = [
 // Upload Client mit Fehlerbehandlung
 let client;
 try {
-  client = new UploadClient({ 
-    publicKey: process.env.EXPO_PUBLIC_UPLOADCARE_PUBLIC_KEY 
-  });
+  const publicKey = process.env.EXPO_PUBLIC_UPLOADCARE_PUBLIC_KEY;
+  if (publicKey) {
+    client = new UploadClient({ publicKey });
+  } else {
+    console.warn('EXPO_PUBLIC_UPLOADCARE_PUBLIC_KEY not set - upload functionality may be limited');
+  }
 } catch (error) {
   console.error('Failed to initialize UploadClient:', error);
 }
@@ -154,7 +157,7 @@ function useUpload() {
           });
 
           return { 
-            url: `${process.env.EXPO_PUBLIC_BASE_CREATE_USER_CONTENT_URL}/${result.uuid}/`, 
+            url: `${process.env.EXPO_PUBLIC_BASE_CREATE_USER_CONTENT_URL || ''}/${result.uuid}/`, 
             mimeType: result.mimeType || null 
           };
         }
