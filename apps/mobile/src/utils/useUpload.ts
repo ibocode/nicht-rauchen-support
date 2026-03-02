@@ -6,7 +6,7 @@ import { Alert } from 'react-native';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
-  'image/png', 
+  'image/png',
   'image/gif',
   'image/webp',
   'video/mp4',
@@ -14,8 +14,29 @@ const ALLOWED_MIME_TYPES = [
   'application/pdf'
 ];
 
+interface UploadInput {
+  reactNativeAsset?: {
+    file?: {
+      size: number;
+      type: string;
+    };
+    uri: string;
+    name?: string;
+    mimeType?: string;
+  };
+  url?: string;
+  base64?: string;
+  buffer?: Blob | BufferSource;
+}
+
+interface UploadResult {
+  url?: string;
+  mimeType?: string | null;
+  error?: string;
+}
+
 // Upload Client mit Fehlerbehandlung
-let client;
+let client: UploadClient | undefined;
 try {
   const publicKey = process.env.EXPO_PUBLIC_UPLOADCARE_PUBLIC_KEY;
   if (publicKey) {
@@ -31,13 +52,13 @@ try {
  * Hook für sichere Datei-Uploads mit umfassender Validierung
  * @returns {[Function, Object]} Upload-Funktion und Loading-Status
  */
-function useUpload() {
+function useUpload(): [(input: UploadInput) => Promise<UploadResult>, { loading: boolean; error: string | null; cancelUpload: () => void }] {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const abortControllerRef = useRef(null);
+  const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Input-Validierung
-  const validateInput = useCallback((input) => {
+  const validateInput = useCallback((input: UploadInput) => {
     if (!input) {
       throw new Error('Keine Upload-Daten bereitgestellt');
     }
@@ -45,19 +66,19 @@ function useUpload() {
     // Validierung für React Native Asset
     if ("reactNativeAsset" in input && input.reactNativeAsset) {
       const asset = input.reactNativeAsset;
-      
+
       if (asset.file) {
         // Dateigröße prüfen
         if (asset.file.size > MAX_FILE_SIZE) {
           throw new Error(`Datei ist zu groß. Maximum: ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
         }
-        
+
         // MIME-Type prüfen
         if (asset.file.type && !ALLOWED_MIME_TYPES.includes(asset.file.type)) {
           throw new Error('Dateityp nicht unterstützt');
         }
       }
-      
+
       // URI-Validierung
       if (asset.uri && !asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')) {
         throw new Error('Ungültige Datei-URI');
@@ -84,9 +105,9 @@ function useUpload() {
   }, []);
 
   // Sichere Fetch-Funktion mit Timeout
-  const safeFetch = useCallback(async (url, options = {}) => {
+  const safeFetch = useCallback(async (url: string, options: RequestInit = {}) => {
     abortControllerRef.current = new AbortController();
-    
+
     const timeoutId = setTimeout(() => {
       abortControllerRef.current?.abort();
     }, 30000); // 30 Sekunden Timeout
@@ -103,7 +124,7 @@ function useUpload() {
 
       clearTimeout(timeoutId);
       return response;
-    } catch (error) {
+    } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
         throw new Error('Upload-Timeout: Verbindung zu langsam');
@@ -112,7 +133,7 @@ function useUpload() {
     }
   }, []);
 
-  const upload = useCallback(async (input) => {
+  const upload = useCallback(async (input: UploadInput): Promise<UploadResult> => {
     try {
       setLoading(true);
       setError(null);
@@ -120,13 +141,14 @@ function useUpload() {
       // Input validieren
       validateInput(input);
 
-      let response;
+      let response: Response;
 
       if ("reactNativeAsset" in input && input.reactNativeAsset) {
         const asset = input.reactNativeAsset;
 
         if (asset.file) {
           const formData = new FormData();
+          // @ts-ignore: FormData in RN expects special object, ignoring TS check for now
           formData.append("file", asset.file);
 
           response = await safeFetch("/_create/api/upload/", {
@@ -149,6 +171,7 @@ function useUpload() {
             throw new Error('Upload-Client nicht verfügbar');
           }
 
+          // @ts-ignore: UploadClient types mismatch with RN asset
           const result = await client.uploadFile(asset, {
             fileName: asset.name ?? asset.uri.split("/").pop(),
             contentType: asset.mimeType,
@@ -156,12 +179,12 @@ function useUpload() {
             secureExpire
           });
 
-          return { 
-            url: `${process.env.EXPO_PUBLIC_BASE_CREATE_USER_CONTENT_URL || ''}/${result.uuid}/`, 
-            mimeType: result.mimeType || null 
+          return {
+            url: `${process.env.EXPO_PUBLIC_BASE_CREATE_USER_CONTENT_URL || ''}/${result.uuid}/`,
+            mimeType: result.mimeType || null
           };
         }
-      } else if ("url" in input) {
+      } else if ("url" in input && input.url) {
         response = await safeFetch("/_create/api/upload/", {
           method: "POST",
           headers: {
@@ -169,7 +192,7 @@ function useUpload() {
           },
           body: JSON.stringify({ url: input.url })
         });
-      } else if ("base64" in input) {
+      } else if ("base64" in input && input.base64) {
         response = await safeFetch("/_create/api/upload/", {
           method: "POST",
           headers: {
@@ -177,7 +200,7 @@ function useUpload() {
           },
           body: JSON.stringify({ base64: input.base64 })
         });
-      } else {
+      } else if (input.buffer) {
         response = await safeFetch("/_create/api/upload/", {
           method: "POST",
           headers: {
@@ -185,11 +208,13 @@ function useUpload() {
           },
           body: input.buffer
         });
+      } else {
+        throw new Error("Invalid input");
       }
 
       if (!response.ok) {
         let errorMessage = "Upload fehlgeschlagen";
-        
+
         switch (response.status) {
           case 413:
             errorMessage = "Datei zu groß";
@@ -207,32 +232,32 @@ function useUpload() {
             errorMessage = "Server-Fehler";
             break;
         }
-        
+
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      
+
       if (!data.url) {
         throw new Error('Keine URL in der Antwort erhalten');
       }
 
       return { url: data.url, mimeType: data.mimeType || null };
-      
-    } catch (uploadError) {
-      const errorMessage = uploadError instanceof Error 
-        ? uploadError.message 
-        : typeof uploadError === "string" 
-          ? uploadError 
+
+    } catch (uploadError: unknown) {
+      const errorMessage = uploadError instanceof Error
+        ? uploadError.message
+        : typeof uploadError === "string"
+          ? uploadError
           : "Unbekannter Upload-Fehler";
-      
+
       setError(errorMessage);
-      
+
       // Zeige Fehler nur in Development
       if (__DEV__) {
         Alert.alert('Upload-Fehler', errorMessage);
       }
-      
+
       return { error: errorMessage };
     } finally {
       setLoading(false);

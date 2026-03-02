@@ -12,10 +12,46 @@ const STORAGE_KEYS = {
 
 // CRITICAL: Initialization lock to prevent race conditions
 let isInitialized = false;
-let initPromise = null;
+let initPromise: Promise<boolean> | null = null;
 
+interface CheckInStatus {
+  status: 'success' | 'smoked';
+  timestamp: string;
+}
 
-const normalizeDateInput = (date = new Date()) => {
+interface CheckIns {
+  [date: string]: CheckInStatus;
+}
+
+interface Settings {
+  motivationalQuotes?: boolean;
+  dailyNotification?: boolean;
+  cigarettesPerDay?: number;
+  pricePerPack?: number;
+  cigarettesPerPack?: number;
+  yearsSmoked?: number;
+  monthsSmoked?: number;
+}
+
+interface OnboardingData {
+  hasPaid?: boolean;
+  onboardingDate?: string;
+  cigarettesPerDay?: number;
+  pricePerPack?: number;
+  cigarettesPerPack?: number;
+  yearsSmoked?: number;
+  monthsSmoked?: number;
+}
+
+interface GoldenWeekData {
+  status: 'not_started' | 'active' | 'completed' | 'failed';
+  startDate: string | null;
+  progress: number;
+  lastCompletionDate: string | null;
+  introSeen: boolean;
+}
+
+const normalizeDateInput = (date: Date | string = new Date()) => {
   if (typeof date === 'string') {
     return date;
   }
@@ -26,7 +62,7 @@ const normalizeDateInput = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
-const getDaysBetween = (from, to) => {
+const getDaysBetween = (from: string | Date, to: string | Date) => {
   const start = new Date(from);
   const end = new Date(to);
   start.setHours(0, 0, 0, 0);
@@ -35,8 +71,8 @@ const getDaysBetween = (from, to) => {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 };
 
-const normalizeCheckIns = async (raw) => {
-  let parsed = {};
+const normalizeCheckIns = async (raw: string | null) => {
+  let parsed: CheckIns = {};
   let mutated = false;
 
   try {
@@ -46,29 +82,35 @@ const normalizeCheckIns = async (raw) => {
     mutated = true;
   }
 
-  Object.entries(parsed).forEach(([key, value]) => {
+  // Type assertion for raw object iteration
+  const rawObj = parsed as any;
+  const newParsed: CheckIns = {};
+
+  Object.entries(rawObj).forEach(([key, value]: [string, any]) => {
     if (typeof value === 'string') {
-      parsed[key] = {
+      newParsed[key] = {
         status: 'success',
         timestamp: value,
       };
       mutated = true;
     } else if (value && typeof value === 'object') {
       if (!value.status) {
-        parsed[key] = {
+        newParsed[key] = {
           ...value,
           status: 'success',
         };
         mutated = true;
       } else if (value.status !== 'success' && value.status !== 'smoked') {
-        parsed[key] = {
+        newParsed[key] = {
           ...value,
           status: 'success',
         };
         mutated = true;
+      } else {
+        newParsed[key] = value;
       }
     } else {
-      parsed[key] = {
+      newParsed[key] = {
         status: 'success',
         timestamp: new Date().toISOString(),
       };
@@ -76,7 +118,7 @@ const normalizeCheckIns = async (raw) => {
     }
   });
 
-  return { parsed, mutated };
+  return { parsed: newParsed, mutated };
 };
 
 export const quitData = {
@@ -86,12 +128,12 @@ export const quitData = {
     if (isInitialized) {
       return true; // Already initialized
     }
-    
+
     if (initPromise) {
       // Init already in progress, wait for it
       return await initPromise;
     }
-    
+
     initPromise = (async () => {
       try {
         const startDate = await AsyncStorage.getItem(STORAGE_KEYS.START_DATE);
@@ -117,15 +159,15 @@ export const quitData = {
         initPromise = null;
       }
     })();
-    
+
     return await initPromise;
   },
 
-  async setCheckIns(checkIns) {
+  async setCheckIns(checkIns: CheckIns) {
     await AsyncStorage.setItem(STORAGE_KEYS.CHECK_INS, JSON.stringify(checkIns));
   },
 
-  async setDayStatus(date, status) {
+  async setDayStatus(date: Date | string, status: 'success' | 'smoked' | null) {
     try {
       const dateKey = normalizeDateInput(date);
       const { parsed: checkIns } = await this.getCheckInsInternal();
@@ -142,15 +184,15 @@ export const quitData = {
       }
 
       await this.setCheckIns(checkIns);
-      
+
       // Self-healing: If setting to success and no start date exists, set it now.
       if (status === 'success') {
         const startDate = await this.getStartDate();
         if (!startDate) {
-           await AsyncStorage.setItem(STORAGE_KEYS.START_DATE, dateKey);
+          await AsyncStorage.setItem(STORAGE_KEYS.START_DATE, dateKey);
         }
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error setting day status:', error);
@@ -168,7 +210,7 @@ export const quitData = {
       return { parsed };
     } catch (error) {
       console.error('Error normalizing check-ins:', error);
-      return { parsed: {} };
+      return { parsed: {} as CheckIns };
     }
   },
 
@@ -178,7 +220,7 @@ export const quitData = {
     try {
       const today = normalizeDateInput();
       await this.setDayStatus(today, 'success');
-      
+
       return true;
     } catch (error) {
       console.error('Error checking in:', error);
@@ -186,17 +228,17 @@ export const quitData = {
     }
   },
 
-  async markDayAsSmoked(date = new Date()) {
+  async markDayAsSmoked(date: Date | string = new Date()) {
     try {
       const dayKey = normalizeDateInput(date);
       await this.setDayStatus(dayKey, 'smoked');
-      
+
       // Check if Golden Week is active and fail it
       const goldenWeek = await this.getGoldenWeek();
       if (goldenWeek.status === 'active') {
         await this.failGoldenWeek();
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error marking day as smoked:', error);
@@ -204,7 +246,7 @@ export const quitData = {
     }
   },
 
-  async getDayStatus(date = new Date()) {
+  async getDayStatus(date: Date | string = new Date()) {
     try {
       const dayKey = normalizeDateInput(date);
       const { parsed } = await this.getCheckInsInternal();
@@ -247,7 +289,7 @@ export const quitData = {
     try {
       const startDate = await this.getStartDate();
       const checkIns = await this.getCheckIns();
-      
+
       if (!startDate) return 0;
 
       let streak = 0;
@@ -272,18 +314,18 @@ export const quitData = {
       // Safety: Max 3650 days (10 years) to prevent infinite loop
       const maxIterations = 3650;
       let iterations = 0;
-      
+
       const startDateObj = new Date(startDate);
-      
+
       while (iterations < maxIterations) {
         // Stop if we've reached the start date
         if (checkDate < startDateObj) {
           break;
         }
-        
+
         const dateStr = normalizeDateInput(checkDate);
         const status = checkIns[dateStr]?.status;
-        
+
         if (status === 'success') {
           streak += 1;
           checkDate.setDate(checkDate.getDate() - 1);
@@ -291,7 +333,7 @@ export const quitData = {
           // Sobald ein Tag in der Vergangenheit fehlt oder 'smoked' ist, endet die Streak
           break;
         }
-        
+
         iterations++;
       }
 
@@ -312,7 +354,7 @@ export const quitData = {
 
       let longestStreak = 0;
       let currentStreak = 0;
-      let previousDateStr = null;
+      let previousDateStr: string | null = null;
 
       dates.forEach((dateStr) => {
         const status = checkIns[dateStr]?.status;
@@ -327,7 +369,7 @@ export const quitData = {
           // dateStr format: "YYYY-MM-DD"
           const prev = new Date(previousDateStr + 'T00:00:00'); // Local midnight
           const curr = new Date(dateStr + 'T00:00:00'); // Local midnight
-          const diffTime = curr - prev;
+          const diffTime = curr.getTime() - prev.getTime();
           const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
           if (diffDays === 1) {
             currentStreak += 1;
@@ -354,7 +396,7 @@ export const quitData = {
     try {
       const checkIns = await this.getCheckIns();
       const settings = await this.getSettings();
-      
+
       const cigarettesPerDay = settings.cigarettesPerDay || 20;
       const pricePerPack = settings.pricePerPack || 7.00;
       const cigarettesPerPack = settings.cigarettesPerPack || 20;
@@ -389,10 +431,10 @@ export const quitData = {
   async getTotalDaysSinceStart() {
     try {
       const checkIns = await this.getCheckIns();
-      
+
       // Zähle alle Tage mit Check-ins (egal ob success oder smoked)
       const totalDays = Object.keys(checkIns).length;
-      
+
       return totalDays;
     } catch (error) {
       console.error('Error calculating total days:', error);
@@ -401,13 +443,13 @@ export const quitData = {
   },
 
   // Get check-ins for a specific month
-  async getMonthCheckIns(date = new Date()) {
+  async getMonthCheckIns(date = new Date()): Promise<{ [day: number]: string | null }> {
     try {
       const checkIns = await this.getCheckIns();
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
 
-      const monthCheckIns = {};
+      const monthCheckIns: { [day: number]: string | null } = {};
       Object.keys(checkIns).forEach((dateStr) => {
         if (dateStr.startsWith(`${year}-${month}`)) {
           const day = parseInt(dateStr.split('-')[2], 10);
@@ -425,7 +467,7 @@ export const quitData = {
   },
 
   // Add reminder
-  async addReminder(time) {
+  async addReminder(time: string) {
     try {
       const reminders = await this.getReminders();
       if (!reminders.includes(time)) {
@@ -441,10 +483,10 @@ export const quitData = {
   },
 
   // Remove reminder
-  async removeReminder(time) {
+  async removeReminder(time: string) {
     try {
       const reminders = await this.getReminders();
-      const filtered = reminders.filter((r) => r !== time);
+      const filtered = reminders.filter((r: string) => r !== time);
       await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(filtered));
       return filtered;
     } catch (error) {
@@ -465,7 +507,7 @@ export const quitData = {
   },
 
   // Get settings
-  async getSettings() {
+  async getSettings(): Promise<Settings> {
     try {
       const settings = await AsyncStorage.getItem(STORAGE_KEYS.SETTINGS);
       return JSON.parse(settings || '{}');
@@ -476,7 +518,7 @@ export const quitData = {
   },
 
   // Update settings
-  async updateSettings(updates) {
+  async updateSettings(updates: Settings) {
     try {
       const settings = await this.getSettings();
       const updated = { ...settings, ...updates };
@@ -489,7 +531,7 @@ export const quitData = {
   },
 
   // Set settings (alias for updateSettings)
-  async setSettings(settings) {
+  async setSettings(settings: Settings) {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
       return settings;
@@ -500,7 +542,7 @@ export const quitData = {
   },
 
   // Get onboarding data
-  async getOnboardingData() {
+  async getOnboardingData(): Promise<OnboardingData> {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING);
       return JSON.parse(data || '{}');
@@ -511,10 +553,10 @@ export const quitData = {
   },
 
   // Set onboarding data
-  async setOnboardingData(data) {
+  async setOnboardingData(data: OnboardingData) {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING, JSON.stringify(data));
-      
+
       // Sync specific fields to settings for legacy compatibility if needed
       if (data.cigarettesPerDay || data.pricePerPack || data.cigarettesPerPack || data.yearsSmoked) {
         await this.updateSettings({
@@ -525,7 +567,7 @@ export const quitData = {
           monthsSmoked: data.monthsSmoked || 0,
         });
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error setting onboarding data:', error);
@@ -540,12 +582,12 @@ export const quitData = {
       const data = await this.getOnboardingData();
       const localHasPaid = !!data.hasPaid;
       const onboardingDate = data.onboardingDate;
-      
+
       // CRITICAL: Try to verify with RevenueCat for security
       // If this fails (offline/network), we fall back to local flag
       try {
         const hasActiveSubscription = await purchaseService.checkProStatus();
-        
+
         if (hasActiveSubscription) {
           // User has active subscription - ensure local flag is set
           if (!localHasPaid) {
@@ -554,35 +596,35 @@ export const quitData = {
           }
           return true;
         }
-        
+
         // RevenueCat says NOT paid
         if (localHasPaid) {
           // SUSPICIOUS: Local flag says paid but RevenueCat says no
           // Could be: refund, subscription expired, or manipulation
-          
+
           // Grace period: If user just onboarded (within last 5 minutes), give benefit of doubt
           // RevenueCat sync can take a moment
           if (onboardingDate) {
             const onboardedTime = new Date(onboardingDate).getTime();
             const now = Date.now();
             const fiveMinutes = 5 * 60 * 1000;
-            
+
             if (now - onboardedTime < fiveMinutes) {
               console.warn('User just onboarded, giving 5min grace period for RevenueCat sync');
               return true; // Trust local flag during grace period
             }
           }
-          
+
           // After grace period, trust RevenueCat (online) over local flag
           console.warn('RevenueCat reports no active subscription, blocking access (possible refund)');
           return false;
         }
-        
+
         return false;
-      } catch (networkError) {
+      } catch (networkError: any) {
         // RevenueCat check failed (network issue, init failed, etc.)
-        console.warn('RevenueCat check failed, using local fallback:', networkError.message);
-        
+        console.warn('RevenueCat check failed, using local fallback:', networkError?.message);
+
         // OFFLINE FALLBACK: Trust local flag if network is down
         // This allows legitimate users to use app offline
         return localHasPaid;
@@ -593,13 +635,27 @@ export const quitData = {
     }
   },
 
+  // Check if user has completed the onboarding flow (regardless of payment status).
+  // Used to decide: show paywall (onboarded but not paid) vs. show full onboarding (never started).
+  async hasCompletedOnboarding(): Promise<boolean> {
+    try {
+      const data = await this.getOnboardingData();
+      // onboardingDate is set at the END of the onboarding steps, just before the paywall.
+      // If it exists, the user has been through onboarding.
+      return !!data.onboardingDate;
+    } catch (error) {
+      console.error('Error checking onboarding completion:', error);
+      return false;
+    }
+  },
+
   // --- GOLDEN WEEK CHALLENGE (NEW) ---
 
-  async getGoldenWeek() {
+  async getGoldenWeek(): Promise<GoldenWeekData> {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.GOLDEN_WEEK);
       if (!raw) {
-        return { 
+        return {
           status: 'not_started',
           startDate: null,
           progress: 0,
@@ -609,7 +665,7 @@ export const quitData = {
       }
       // CRITICAL: Wrap JSON.parse in try-catch to prevent crash on corrupted data
       try {
-        return JSON.parse(raw) || { 
+        return JSON.parse(raw) || {
           status: 'not_started',
           startDate: null,
           progress: 0,
@@ -618,7 +674,7 @@ export const quitData = {
         };
       } catch (parseError) {
         console.error('Failed to parse Golden Week data, resetting:', parseError);
-        return { 
+        return {
           status: 'not_started',
           startDate: null,
           progress: 0,
@@ -633,13 +689,13 @@ export const quitData = {
 
   async setGoldenWeekIntroSeen() {
     const current = await this.getGoldenWeek();
-    const newState = { ...current, introSeen: true };
+    const newState: GoldenWeekData = { ...current, introSeen: true };
     await AsyncStorage.setItem(STORAGE_KEYS.GOLDEN_WEEK, JSON.stringify(newState));
     return newState;
   },
 
   async startGoldenWeek() {
-    const state = {
+    const state: GoldenWeekData = {
       status: 'active',
       startDate: new Date().toISOString(),
       progress: 0,
@@ -656,22 +712,22 @@ export const quitData = {
     if (current.status !== 'active') return current;
 
     const today = normalizeDateInput();
-    
+
     // Check if already completed today (idempotent)
     // lastCompletionDate is stored as date string (YYYY-MM-DD)
     if (current.lastCompletionDate === today) {
-        return current; // Already done today
+      return current; // Already done today
     }
 
     // IMPORTANT: Verify user was actually smoke-free today
     const todayStatus = await this.getDayStatus(today);
     if (todayStatus !== 'success') {
-        // User hasn't checked in as smoke-free today, don't allow completion
-        return current;
+      // User hasn't checked in as smoke-free today, don't allow completion
+      return current;
     }
 
     const newProgress = current.progress + 1;
-    const newState = {
+    const newState: GoldenWeekData = {
       ...current,
       progress: newProgress,
       lastCompletionDate: normalizeDateInput(), // Store as date string, not ISO
@@ -681,12 +737,12 @@ export const quitData = {
     await AsyncStorage.setItem(STORAGE_KEYS.GOLDEN_WEEK, JSON.stringify(newState));
     return newState;
   },
-  
+
   async failGoldenWeek() {
-      const current = await this.getGoldenWeek();
-      const newState = { ...current, status: 'failed' };
-      await AsyncStorage.setItem(STORAGE_KEYS.GOLDEN_WEEK, JSON.stringify(newState));
-      return newState;
+    const current = await this.getGoldenWeek();
+    const newState: GoldenWeekData = { ...current, status: 'failed' };
+    await AsyncStorage.setItem(STORAGE_KEYS.GOLDEN_WEEK, JSON.stringify(newState));
+    return newState;
   },
 
   // Reset all data
@@ -701,3 +757,4 @@ export const quitData = {
     }
   },
 };
+

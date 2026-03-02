@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { notificationService } from '@/utils/notifications';
 import { purchaseService } from '@/utils/purchases';
+import { analyticsService } from '@/utils/analytics';
 import { quitData } from '@/utils/quitData';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -22,7 +23,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
-      cacheTime: 1000 * 60 * 30, // 30 minutes
+      gcTime: 1000 * 60 * 30, // 30 minutes (formerly cacheTime)
       retry: 1,
       refetchOnWindowFocus: false,
     },
@@ -45,10 +46,11 @@ export default function RootLayout() {
         // Initialisiere App-Daten (Kritisch)
         await quitData.init();
         await purchaseService.init();
+        await analyticsService.initialize();
       } catch (error) {
         console.error('Failed to init services:', error);
       }
-      
+
       // Starte Auth sofort, um UI anzuzeigen (Kritisch)
       try {
         initiate();
@@ -62,7 +64,7 @@ export default function RootLayout() {
         .then(() => notificationService.refillNotifications())
         .catch(err => console.log('Notification init failed (non-critical):', err));
     };
-    
+
     initializeApp().catch(error => {
       console.error('Fatal initialization error:', error);
       ensureAuthReady();
@@ -102,33 +104,33 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <Stack 
-          screenOptions={{ 
+        <Stack
+          screenOptions={{
             headerShown: false,
             animation: 'slide_from_right', // Konsistente Slide-Animation
             presentation: 'card', // Standard Karten-Präsentation
             contentStyle: { backgroundColor: '#121217' }, // Fix white flash
-          }} 
+          }}
           initialRouteName="index"
         >
           <Stack.Screen name="index" />
-          <Stack.Screen 
-            name="onboarding" 
+          <Stack.Screen
+            name="onboarding"
             options={{
               animation: 'fade', // Onboarding soll sanft einfaden
             }}
           />
-          <Stack.Screen 
-            name="(tabs)" 
+          <Stack.Screen
+            name="(tabs)"
             options={{
               animation: 'fade', // Nach Onboarding/Splash sanft zu Tabs faden
             }}
           />
         </Stack>
-        
+
         {showSplash && (
-          <SplashScreenComponent 
-            isReady={isReady} 
+          <SplashScreenComponent
+            isReady={isReady}
             onFinish={handleSplashFinish}
           />
         )}

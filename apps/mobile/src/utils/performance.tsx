@@ -1,18 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { analyticsService } from './analytics';
 
+// Extend Performance interface for non-standard memory API
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+
+interface ExtendedPerformance extends Performance {
+  memory?: PerformanceMemory;
+}
+
 // Performance Monitoring Hook
-export const usePerformanceMonitor = (componentName) => {
-  const startTime = useRef(null);
+export const usePerformanceMonitor = (componentName: string) => {
+  const startTime = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     startTime.current = performance.now();
-    
+
     return () => {
       if (startTime.current) {
         const renderTime = performance.now() - startTime.current;
-        
+
         // Track Performance nur wenn es signifikant ist (> 16ms für 60fps)
         if (renderTime > 16) {
           analyticsService.trackPerformance('component_render_time', renderTime, {
@@ -38,14 +49,22 @@ export const usePerformanceMonitor = (componentName) => {
   return { isLoading, markLoadingComplete };
 };
 
+interface MemoryInfo {
+  used: number;
+  total: number;
+  limit: number;
+  usage: number;
+}
+
 // Memory Usage Monitor
 export const useMemoryMonitor = () => {
-  const [memoryInfo, setMemoryInfo] = useState(null);
+  const [memoryInfo, setMemoryInfo] = useState<MemoryInfo | null>(null);
 
   useEffect(() => {
     const checkMemory = () => {
-      if (typeof performance !== 'undefined' && performance.memory) {
-        const memory = performance.memory;
+      const perf = performance as ExtendedPerformance;
+      if (typeof perf !== 'undefined' && perf.memory) {
+        const memory = perf.memory;
         setMemoryInfo({
           used: memory.usedJSHeapSize,
           total: memory.totalJSHeapSize,
@@ -72,9 +91,17 @@ export const useMemoryMonitor = () => {
   return memoryInfo;
 };
 
+interface NetworkInfo {
+  isOnline: boolean;
+  connectionType: string;
+  effectiveType: string;
+  downlink?: number;
+  rtt?: number;
+}
+
 // Network Performance Monitor
 export const useNetworkMonitor = () => {
-  const [networkInfo, setNetworkInfo] = useState({
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo>({
     isOnline: true,
     connectionType: 'unknown',
     effectiveType: 'unknown'
@@ -82,8 +109,8 @@ export const useNetworkMonitor = () => {
 
   useEffect(() => {
     const updateNetworkInfo = () => {
-      if (typeof navigator !== 'undefined' && navigator.connection) {
-        const connection = navigator.connection;
+      if (typeof navigator !== 'undefined' && (navigator as any).connection) {
+        const connection = (navigator as any).connection;
         setNetworkInfo({
           isOnline: navigator.onLine,
           connectionType: connection.type || 'unknown',
@@ -98,9 +125,9 @@ export const useNetworkMonitor = () => {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', updateNetworkInfo);
       window.addEventListener('offline', updateNetworkInfo);
-      
-      if (navigator.connection) {
-        navigator.connection.addEventListener('change', updateNetworkInfo);
+
+      if ((navigator as any).connection) {
+        (navigator as any).connection.addEventListener('change', updateNetworkInfo);
       }
     }
 
@@ -110,9 +137,9 @@ export const useNetworkMonitor = () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', updateNetworkInfo);
         window.removeEventListener('offline', updateNetworkInfo);
-        
-        if (navigator.connection) {
-          navigator.connection.removeEventListener('change', updateNetworkInfo);
+
+        if ((navigator as any).connection) {
+          (navigator as any).connection.removeEventListener('change', updateNetworkInfo);
         }
       }
     };
@@ -122,14 +149,14 @@ export const useNetworkMonitor = () => {
 };
 
 // App Performance Monitor (Hauptkomponente)
-export const AppPerformanceMonitor = ({ children }) => {
+export const AppPerformanceMonitor = ({ children }: { children: React.ReactNode }) => {
   const memoryInfo = useMemoryMonitor();
   const networkInfo = useNetworkMonitor();
 
   useEffect(() => {
     // Track App-Start Performance
     const appStartTime = performance.now();
-    
+
     analyticsService.trackPerformance('app_start_time', appStartTime, {
       memory_used: memoryInfo?.used || 0,
       network_type: networkInfo.connectionType
@@ -164,15 +191,15 @@ export const AppPerformanceMonitor = ({ children }) => {
     }
   }, [memoryInfo, networkInfo]);
 
-  return children;
+  return <>{ children } </>;
 };
 
 // Utility-Funktionen für Performance-Optimierung
 export const performanceUtils = {
   // Debounce-Funktion für häufige Events
-  debounce: (func, wait) => {
-    let timeout;
-    return function executedFunction(...args) {
+  debounce: (func: Function, wait: number) => {
+    let timeout: NodeJS.Timeout;
+    return function executedFunction(...args: any[]) {
       const later = () => {
         clearTimeout(timeout);
         func(...args);
@@ -183,9 +210,9 @@ export const performanceUtils = {
   },
 
   // Throttle-Funktion für häufige Events
-  throttle: (func, limit) => {
-    let inThrottle;
-    return function executedFunction(...args) {
+  throttle: (func: Function, limit: number) => {
+    let inThrottle: boolean;
+    return function executedFunction(this: any, ...args: any[]) {
       if (!inThrottle) {
         func.apply(this, args);
         inThrottle = true;
@@ -195,12 +222,12 @@ export const performanceUtils = {
   },
 
   // Lazy Loading Helper
-  lazyLoad: (importFunction) => {
+  lazyLoad: (importFunction: () => Promise<{ default: React.ComponentType<any> }>) => {
     return React.lazy(importFunction);
   },
 
   // Image Optimization Helper
-  optimizeImage: (uri, width, height, quality = 80) => {
+  optimizeImage: (uri: string, width: number, height: number, quality = 80) => {
     // Hier würde man eine Bildoptimierung implementieren
     return {
       uri,

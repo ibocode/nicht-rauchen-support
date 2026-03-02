@@ -45,10 +45,6 @@
           "remote-notification"
         ],
         "NSUserNotificationsUsageDescription": "Diese App sendet tägliche Erinnerungen um 18:00 Uhr, um dich an deinen Check-in zu erinnern (nur wenn du noch nicht eingecheckt hast).",
-        "NSCameraUsageDescription": "Erlaubt das Aufnehmen von Fotos für deine Fortschrittsdokumentation.",
-        "NSPhotoLibraryUsageDescription": "Erlaubt den Zugriff auf deine Fotos für die Fortschrittsdokumentation.",
-        "NSMicrophoneUsageDescription": "Erlaubt das Aufnehmen von Audio-Memos für deine Motivation.",
-        "NSLocationWhenInUseUsageDescription": "Erlaubt die Standortbestimmung für personalisierte Inhalte.",
         "CFBundleDisplayName": "Nicht Rauchen",
         "CFBundleName": "Nicht Rauchen",
         "CFBundleShortVersionString": "1.2",
@@ -82,16 +78,9 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK",
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
       ],
@@ -131,7 +120,6 @@
           "backgroundColor": "#121217"
         }
       ],
-      "expo-audio",
       [
         "expo-build-properties",
         {

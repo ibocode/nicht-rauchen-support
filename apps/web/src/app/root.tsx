@@ -367,10 +367,51 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   }, [pathname]);
   return (
-    <html lang="en">
+    <html lang="de">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        
+        {/* Primary Meta Tags */}
+        <meta name="title" content="Nicht Rauchen - Rauchstopp Tracker App" />
+        <meta name="description" content="Die ultimative App zum Rauchstopp! Verfolge deine Fortschritte, erhalte tägliche Erinnerungen und erreiche deine Ziele mit unserem intelligenten Tracking-System." />
+        <meta name="keywords" content="rauchstopp, nicht rauchen, gesundheit, tracking, streak, motivation, rauchfrei, aufhören, zigaretten, gesund leben" />
+        <meta name="author" content="Nicht Rauchen App" />
+        <meta name="language" content="de" />
+        <meta name="robots" content="index, follow" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://nichtrauchen.app/" />
+        <meta property="og:title" content="Nicht Rauchen - Rauchstopp Tracker App" />
+        <meta property="og:description" content="Die ultimative App zum Rauchstopp! Verfolge deine Fortschritte, erhalte tägliche Erinnerungen und erreiche deine Ziele." />
+        <meta property="og:image" content="https://nichtrauchen.app/og-image.png" />
+        <meta property="og:locale" content="de_DE" />
+        <meta property="og:site_name" content="Nicht Rauchen" />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content="https://nichtrauchen.app/" />
+        <meta name="twitter:title" content="Nicht Rauchen - Rauchstopp Tracker App" />
+        <meta name="twitter:description" content="Die ultimative App zum Rauchstopp! Verfolge deine Fortschritte, erhalte tägliche Erinnerungen und erreiche deine Ziele." />
+        <meta name="twitter:image" content="https://nichtrauchen.app/twitter-image.png" />
+        
+        {/* Apple Meta Tags */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Nicht Rauchen" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        
+        {/* iOS App Store */}
+        <meta name="apple-itunes-app" content="app-id=1234567890" />
+        
+        {/* Theme Color */}
+        <meta name="theme-color" content="#2DD4BF" />
+        <meta name="msapplication-TileColor" content="#2DD4BF" />
+        
+        {/* Canonical URL */}
+        <link rel="canonical" href="https://nichtrauchen.app/" />
+        
         <Meta />
         <Links />
         <script type="module" src="/src/__create/dev-error-overlay.js"></script>

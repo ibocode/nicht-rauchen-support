@@ -1,11 +1,16 @@
 import { useCallback, useRef, useEffect } from 'react';
 
-  function useHandleStreamResponse({
+interface UseHandleStreamResponseProps {
+  onChunk: (chunk: string) => void;
+  onFinish: (fullContent: string) => void;
+}
+
+function useHandleStreamResponse({
   onChunk,
   onFinish
-}) {
+}: UseHandleStreamResponseProps): (response: Response) => Promise<void> {
   const handleStreamResponse = useCallback(
-    async (response) => {
+    async (response: Response) => {
       if (response.body) {
         const reader = response.body.getReader();
         if (reader) {
@@ -26,11 +31,14 @@ import { useCallback, useRef, useEffect } from 'react';
     },
     [onChunk, onFinish]
   );
+
   const handleStreamResponseRef = useRef(handleStreamResponse);
+
   useEffect(() => {
     handleStreamResponseRef.current = handleStreamResponse;
   }, [handleStreamResponse]);
-  return useCallback((response) => handleStreamResponseRef.current(response), []); 
+
+  return useCallback((response: Response) => handleStreamResponseRef.current(response), []);
 }
 
-  export default useHandleStreamResponse;
+export default useHandleStreamResponse;

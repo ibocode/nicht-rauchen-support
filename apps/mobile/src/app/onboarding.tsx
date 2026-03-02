@@ -1,6 +1,6 @@
-import { View, Text, TouchableOpacity, Animated, Dimensions, StyleSheet, Easing, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, Dimensions, StyleSheet, Easing, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -42,9 +42,9 @@ const FloatingParticle = ({ delay = 0, duration = 4000, size = 20, startX, start
 
   return (
     <Animated.View style={{ position: 'absolute', left: startX, top: startY, transform: [{ translateY }], opacity }}>
-       <Svg width={size} height={size} viewBox="0 0 24 24">
-         <Circle cx="12" cy="12" r="10" fill={color} opacity={0.6} />
-       </Svg>
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Circle cx="12" cy="12" r="10" fill={color} opacity={0.6} />
+      </Svg>
     </Animated.View>
   );
 };
@@ -113,7 +113,7 @@ const PrimaryButton = ({ onPress, title }) => {
     >
       <Animated.View style={[
         styles.buttonPrimary,
-        { 
+        {
           transform: [{ scale }],
           backgroundColor,
           shadowOpacity: pressAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }),
@@ -148,10 +148,10 @@ const ProgressBar = ({ progress }) => {
 
   return (
     <View style={{ height: 4, backgroundColor: PALETTE.dark.surfaceHighlight, borderRadius: 2, overflow: 'hidden', marginTop: SPACING.s }}>
-      <Animated.View style={{ 
-        width: widthAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), 
-        height: '100%', 
-        backgroundColor: PALETTE.dark.primary 
+      <Animated.View style={{
+        width: widthAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+        height: '100%',
+        backgroundColor: PALETTE.dark.primary
       }} />
     </View>
   );
@@ -211,9 +211,9 @@ const QuickChips = ({ options, onSelect, current }) => (
           backgroundColor: current === val ? PALETTE.dark.primary : PALETTE.dark.surfaceHighlight,
         }}
       >
-         <Text style={{ fontFamily: 'Inter_600SemiBold', color: current === val ? '#FFF' : PALETTE.dark.textMuted, fontSize: 13 }}>
-           {val}
-         </Text>
+        <Text style={{ fontFamily: 'Inter_600SemiBold', color: current === val ? '#FFF' : PALETTE.dark.textMuted, fontSize: 13 }}>
+          {val}
+        </Text>
       </TouchableOpacity>
     ))}
   </View>
@@ -259,16 +259,16 @@ const PlanOption = ({ title, price, originalPrice, subtext, badge, badgeColor, s
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 16, color: PALETTE.dark.text }}>{title}</Text>
         {badge && (
-           <View style={{ backgroundColor: badgeColor || PALETTE.dark.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: '#121217' }}>{badge}</Text>
-           </View>
+          <View style={{ backgroundColor: badgeColor || PALETTE.dark.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: '#121217' }}>{badge}</Text>
+          </View>
         )}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
         {originalPrice && (
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: PALETTE.dark.textMuted, textDecorationLine: 'line-through' }}>
-                {originalPrice}
-            </Text>
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: PALETTE.dark.textMuted, textDecorationLine: 'line-through' }}>
+            {originalPrice}
+          </Text>
         )}
         <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: PALETTE.dark.text }}>{price}</Text>
       </View>
@@ -287,8 +287,12 @@ const PlanOption = ({ title, price, originalPrice, subtext, badge, badgeColor, s
 // --- Main Screen ---
 export default function OnboardingScreen() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  
+  const { initialStep } = useLocalSearchParams<{ initialStep?: string }>();
+
+  // If routed with ?initialStep=paywall, jump directly to the paywall (step 11).
+  // This happens when a user completed onboarding but hasn't paid yet (app restart).
+  const [step, setStep] = useState(initialStep === 'paywall' ? 11 : 0);
+
   const [fontsLoaded] = useFonts({
     Poppins_600SemiBold,
     Poppins_700Bold,
@@ -309,7 +313,7 @@ export default function OnboardingScreen() {
 
   // Paywall State
   const [selectedPlan, setSelectedPlan] = useState('yearly'); // 'yearly' | 'weekly'
-  
+
   // RevenueCat State
   const [offerings, setOfferings] = useState(null);
   const [isLoadingPrice, setIsLoadingPrice] = useState(true);
@@ -318,78 +322,91 @@ export default function OnboardingScreen() {
   // Load Prices
   useEffect(() => {
     const loadOffers = async () => {
-        try {
-            const currentOfferings = await purchaseService.getOfferings();
-            if (currentOfferings) {
-                setOfferings(currentOfferings);
-            }
-        } catch (e) {
-            console.log('Error loading offers', e);
-        } finally {
-            setIsLoadingPrice(false);
+      try {
+        const currentOfferings = await purchaseService.getOfferings();
+        if (currentOfferings) {
+          setOfferings(currentOfferings);
         }
+      } catch (e) {
+        console.log('Error loading offers', e);
+      } finally {
+        setIsLoadingPrice(false);
+      }
     };
     loadOffers();
   }, []);
 
   const handlePurchase = async () => {
     if (!offerings) {
-        Alert.alert("Fehler", "Verbindung zum Store fehlgeschlagen. Bitte prüfe deine Internetverbindung.");
-        return;
+      Alert.alert("Fehler", "Verbindung zum Store fehlgeschlagen. Bitte prüfe deine Internetverbindung.");
+      return;
     }
-    
+
     setIsPurchasing(true);
     try {
-        const pkgToBuy = selectedPlan === 'yearly' 
-            ? offerings.annual 
-            : offerings.weekly;
+      const pkgToBuy = selectedPlan === 'yearly'
+        ? offerings.annual
+        : offerings.weekly;
 
-        if (!pkgToBuy) {
-            if (offerings.availablePackages.length > 0) {
-                 const success = await purchaseService.purchasePackage(offerings.availablePackages[0]);
-                 if (success) await completeOnboarding();
-            } else {
-                 Alert.alert("Fehler", "Produkte konnten nicht geladen werden.");
-            }
-            return;
+      if (!pkgToBuy) {
+        // Fallback: find the correct package by identifier type rather than taking [0] blindly.
+        // availablePackages[0] could be the wrong plan if annual is null but weekly exists.
+        const fallback = selectedPlan === 'yearly'
+          ? offerings.availablePackages.find(p => p.packageType === 'ANNUAL')
+          : offerings.availablePackages.find(p => p.packageType === 'WEEKLY');
+        const finalPkg = fallback || offerings.availablePackages[0];
+        if (finalPkg) {
+          const success = await purchaseService.purchasePackage(finalPkg);
+          if (success) await completeOnboarding();
+        } else {
+          Alert.alert("Fehler", "Produkte konnten nicht geladen werden.");
         }
+        return;
+      }
 
-        const success = await purchaseService.purchasePackage(pkgToBuy);
-        if (success) {
-            await completeOnboarding();
-        }
+      const success = await purchaseService.purchasePackage(pkgToBuy);
+      if (success) {
+        await completeOnboarding();
+      }
     } catch (e) {
-        Alert.alert("Fehler", e.message || "Kauf fehlgeschlagen. Bitte versuche es erneut.");
+      Alert.alert("Fehler", e.message || "Kauf fehlgeschlagen. Bitte versuche es erneut.");
     } finally {
-        setIsPurchasing(false);
+      setIsPurchasing(false);
     }
   };
 
   const handleRestore = async () => {
-      setIsPurchasing(true);
+    setIsPurchasing(true);
+    try {
       const success = await purchaseService.restorePurchases();
-      setIsPurchasing(false);
       if (success) {
-          Alert.alert("Erfolg", "Einkäufe wiederhergestellt!");
-          await completeOnboarding();
+        Alert.alert("Erfolg", "Einkäufe wiederhergestellt!");
+        await completeOnboarding();
       } else {
-          Alert.alert("Info", "Keine aktiven Abos gefunden.");
+        Alert.alert("Info", "Keine aktiven Abos gefunden.");
       }
+    } catch (e: any) {
+      Alert.alert("Fehler", e?.message || "Wiederherstellung fehlgeschlagen. Bitte versuche es erneut.");
+    } finally {
+      // CRITICAL: Always reset isPurchasing — even on error.
+      // Without this, the button stays disabled forever after a network error.
+      setIsPurchasing(false);
+    }
   };
-  
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const analysisProgress = useRef(new Animated.Value(0)).current;
   const [analysisText, setAnalysisText] = useState('Initialisiere...');
   const [analysisSubtext, setAnalysisSubtext] = useState('');
   const [analysisIcon, setAnalysisIcon] = useState('analytics');
-  
+
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   if (!fontsLoaded) {
-      return <View style={{ flex: 1, backgroundColor: '#121217' }} />;
+    return <View style={{ flex: 1, backgroundColor: '#121217' }} />;
   }
-  
+
   const goToStep = (nextStep) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
@@ -411,51 +428,66 @@ export default function OnboardingScreen() {
   const startAnalysis = () => {
     // Reset progress
     analysisProgress.setValue(0);
-    
+
     // 1. Smooth Exit from Question (Fade Out)
     Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
-        setIsAnalyzing(true);
-        setAnalysisText('Analysiere Suchtprofil...');
-        setAnalysisIcon('analytics');
-        
-        // 2. Smooth Entry to Analysis (Fade In)
-        Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-        
-        // --- 10 SECONDS ANALYSIS SEQUENCE ---
-        Animated.sequence([
-          Animated.timing(analysisProgress, { toValue: 0.1, duration: 1000, easing: Easing.linear, useNativeDriver: false }),
-          Animated.timing(analysisProgress, { toValue: 0.2, duration: 1500, easing: Easing.linear, useNativeDriver: false }),
-          Animated.timing(analysisProgress, { toValue: 0.5, duration: 2500, easing: Easing.bezier(0.2, 1, 0.2, 1), useNativeDriver: false }),
-          Animated.timing(analysisProgress, { toValue: 0.7, duration: 2000, easing: Easing.linear, useNativeDriver: false }),
-          Animated.timing(analysisProgress, { toValue: 0.9, duration: 2000, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-          Animated.timing(analysisProgress, { toValue: 1.0, duration: 1000, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
-        ]).start(() => {
-            // 3. Smooth Exit from Analysis (Fade Out)
-            Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true }).start(() => {
-                setStep(11); 
-                setIsAnalyzing(false);
-                // 4. Smooth Entry to Paywall (Fade In)
-                Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-            });
-        });
+      setIsAnalyzing(true);
+      setAnalysisText('Analysiere Suchtprofil...');
+      setAnalysisIcon('analytics');
 
-        // Text Timeline (Matches 10000ms) - PSYCHOLOGISCH OPTIMIERT
-        const timeline = [
-          { t: 0, text: 'Analysiere Gewohnheiten...', sub: 'Dein Rauchverhalten wird ausgewertet', icon: 'analytics' },
-          { t: 2500, text: 'Berechne Gesundheitsrisiko...', sub: 'Lungenkapazität, Kreislauf, Regeneration', icon: 'pulse' },
-          { t: 5000, text: 'Kalkuliere finanzielle Freiheit...', sub: 'Du könntest ein Vermögen sparen', icon: 'wallet' },
-          { t: 7500, text: 'Erstelle Ausstiegsplan...', sub: 'Maßgeschneidert auf deinen Alltag', icon: 'construct' },
-          { t: 9000, text: 'Dein Weg ist bereit.', sub: 'Der erste Schritt in die Freiheit.', icon: 'checkmark-circle' }
-        ];
+      // 2. Smooth Entry to Analysis (Fade In)
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
 
-        timeline.forEach(({ t, text, sub, icon }) => {
-          setTimeout(() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setAnalysisText(text);
-            setAnalysisSubtext(sub);
-            setAnalysisIcon(icon);
-          }, t);
+      // --- 10 SECONDS ANALYSIS SEQUENCE ---
+      Animated.sequence([
+        Animated.timing(analysisProgress, { toValue: 0.1, duration: 1000, easing: Easing.linear, useNativeDriver: false }),
+        Animated.timing(analysisProgress, { toValue: 0.2, duration: 1500, easing: Easing.linear, useNativeDriver: false }),
+        Animated.timing(analysisProgress, { toValue: 0.5, duration: 2500, easing: Easing.bezier(0.2, 1, 0.2, 1), useNativeDriver: false }),
+        Animated.timing(analysisProgress, { toValue: 0.7, duration: 2000, easing: Easing.linear, useNativeDriver: false }),
+        Animated.timing(analysisProgress, { toValue: 0.9, duration: 2000, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(analysisProgress, { toValue: 1.0, duration: 1000, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+      ]).start(() => {
+        // Save onboardingDate NOW — before paywall — so hasCompletedOnboarding()
+        // correctly returns true on the next app start for free users.
+        quitData.getOnboardingData().then(existing => {
+          if (!existing.onboardingDate) {
+            quitData.setOnboardingData({
+              ...existing,
+              cigarettesPerDay: answers.cigarettesPerDay,
+              cigarettesPerPack: answers.cigarettesPerPack,
+              pricePerPack: answers.packPrice,
+              yearsSmoked: answers.yearsSmoked,
+              monthsSmoked: answers.monthsSmoked,
+              onboardingDate: new Date().toISOString(), // mark as onboarded (not paid yet)
+            }).catch(err => console.warn('Could not save pre-paywall onboarding date:', err));
+          }
         });
+        // 3. Smooth Exit from Analysis (Fade Out)
+        Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true }).start(() => {
+          setStep(11);
+          setIsAnalyzing(false);
+          // 4. Smooth Entry to Paywall (Fade In)
+          Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+        });
+      });
+
+      // Text Timeline (Matches 10000ms) - PSYCHOLOGISCH OPTIMIERT
+      const timeline = [
+        { t: 0, text: 'Analysiere Gewohnheiten...', sub: 'Dein Rauchverhalten wird ausgewertet', icon: 'analytics' },
+        { t: 2500, text: 'Berechne Gesundheitsrisiko...', sub: 'Lungenkapazität, Kreislauf, Regeneration', icon: 'pulse' },
+        { t: 5000, text: 'Kalkuliere finanzielle Freiheit...', sub: 'Du könntest ein Vermögen sparen', icon: 'wallet' },
+        { t: 7500, text: 'Erstelle Ausstiegsplan...', sub: 'Maßgeschneidert auf deinen Alltag', icon: 'construct' },
+        { t: 9000, text: 'Dein Weg ist bereit.', sub: 'Der erste Schritt in die Freiheit.', icon: 'checkmark-circle' }
+      ];
+
+      timeline.forEach(({ t, text, sub, icon }) => {
+        setTimeout(() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setAnalysisText(text);
+          setAnalysisSubtext(sub);
+          setAnalysisIcon(icon);
+        }, t);
+      });
     });
   };
 
@@ -463,10 +495,10 @@ export default function OnboardingScreen() {
     <View style={[styles.contentContainer, { paddingHorizontal: SPACING.l }]}>
       <Text style={styles.question}>Ein letzter Gedanke.</Text>
       <Text style={styles.subtitle}>Bevor wir deinen Plan erstellen.</Text>
-      
-      <View style={{ 
+
+      <View style={{
         backgroundColor: '#1A1F2B', // Subtiles Surface
-        padding: SPACING.xl, 
+        padding: SPACING.xl,
         borderRadius: RADIUS.l,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.05)',
@@ -474,7 +506,7 @@ export default function OnboardingScreen() {
         alignItems: 'center'
       }}>
         <Ionicons name="flag-outline" size={32} color={PALETTE.dark.primary} style={{ marginBottom: 16 }} />
-        
+
         <Text style={{ fontFamily: 'Inter_500Medium', color: '#FFF', fontSize: 16, marginBottom: 12, textAlign: 'center' }}>
           "Ich bin bereit für die Veränderung."
         </Text>
@@ -493,16 +525,16 @@ export default function OnboardingScreen() {
     try {
       // SECURITY: Verify payment with RevenueCat before granting access
       const isVerified = await purchaseService.checkProStatus();
-      
+
       if (!isVerified) {
         Alert.alert(
-          'Zahlung wird verifiziert', 
+          'Zahlung wird verifiziert',
           'Bitte warte einen Moment während wir deine Zahlung bestätigen.'
         );
         // Wait 2 seconds and check again (sometimes takes a moment to sync)
         await new Promise(resolve => setTimeout(resolve, 2000));
         const isVerifiedRetry = await purchaseService.checkProStatus();
-        
+
         if (!isVerifiedRetry) {
           Alert.alert(
             'Verifizierung fehlgeschlagen',
@@ -511,7 +543,7 @@ export default function OnboardingScreen() {
           return;
         }
       }
-      
+
       // Payment verified - proceed with onboarding completion
       const settings = {
         cigarettesPerDay: answers.cigarettesPerDay,
@@ -541,27 +573,27 @@ export default function OnboardingScreen() {
   };
 
   // --- Render Helpers ---
-  
+
   const renderInterstitial = ({ icon, title, text, buttonText = "Weiter" }) => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.l }}>
-      <View style={{ 
-        width: 100, height: 100, borderRadius: 50, 
-        backgroundColor: 'rgba(45, 212, 191, 0.1)', 
+      <View style={{
+        width: 100, height: 100, borderRadius: 50,
+        backgroundColor: 'rgba(45, 212, 191, 0.1)',
         alignItems: 'center', justifyContent: 'center',
         marginBottom: SPACING.xl,
         borderWidth: 1, borderColor: PALETTE.dark.primary
       }}>
-         <Ionicons name={icon} size={48} color={PALETTE.dark.primary} />
+        <Ionicons name={icon} size={48} color={PALETTE.dark.primary} />
       </View>
-      
+
       <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 28, color: '#FFF', textAlign: 'center', marginBottom: SPACING.m }}>
         {title}
       </Text>
-      
+
       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 16, color: PALETTE.dark.textSecondary, textAlign: 'center', lineHeight: 26 }}>
         {text}
       </Text>
-      
+
       <View style={{ marginTop: 60, width: '100%' }}>
         <PrimaryButton onPress={handleNext} title={buttonText} />
       </View>
@@ -600,10 +632,10 @@ export default function OnboardingScreen() {
       <View style={{ marginTop: 40 }}>
         <StepperControl value={answers.cigarettesPerDay} onDecrement={() => setAnswers(p => ({ ...p, cigarettesPerDay: Math.max(1, p.cigarettesPerDay - 1) }))} onIncrement={() => setAnswers(p => ({ ...p, cigarettesPerDay: Math.min(100, p.cigarettesPerDay + 1) }))} />
         <QuickChips options={[5, 10, 15, 20, 25, 30]} current={answers.cigarettesPerDay} onSelect={(val) => setAnswers(p => ({ ...p, cigarettesPerDay: val }))} />
-        
+
         {/* Pain Feedback */}
         <Text style={{ textAlign: 'center', marginTop: 20, color: PALETTE.dark.error, fontSize: 13, fontFamily: 'Inter_500Medium', opacity: 0.8 }}>
-             Das sind {answers.cigarettesPerDay * 365} Zigaretten pro Jahr.
+          Das sind {answers.cigarettesPerDay * 365} Zigaretten pro Jahr.
         </Text>
       </View>
       <View style={styles.bottomAction}>
@@ -631,32 +663,32 @@ export default function OnboardingScreen() {
     const yearlyCost = dailyCost * 365;
 
     return (
-        <View style={[styles.contentContainer, { paddingHorizontal: SPACING.l }]}>
-          <Text style={styles.question}>Preis pro Schachtel?</Text>
-          <View style={{ marginTop: 40 }}>
-            <StepperControl value={answers.packPrice.toFixed(2)} suffix="€" onDecrement={() => setAnswers(p => ({ ...p, packPrice: Math.max(4, p.packPrice - 0.50) }))} onIncrement={() => setAnswers(p => ({ ...p, packPrice: Math.min(20, p.packPrice + 0.50) }))} />
-            <QuickChips options={[7, 8, 9, 10, 12, 15]} current={answers.packPrice} onSelect={(val) => setAnswers(p => ({ ...p, packPrice: val }))} />
-            
-            {/* Pain Feedback */}
-            <Text style={{ textAlign: 'center', marginTop: 20, color: PALETTE.dark.error, fontSize: 13, fontFamily: 'Inter_500Medium', opacity: 0.8 }}>
-                 Das sind {Math.round(yearlyCost).toLocaleString('de-DE')}€, die du jährlich verbrennst.
-            </Text>
-          </View>
-          <View style={styles.bottomAction}>
-            <PrimaryButton onPress={handleNext} title="Weiter" />
-          </View>
+      <View style={[styles.contentContainer, { paddingHorizontal: SPACING.l }]}>
+        <Text style={styles.question}>Preis pro Schachtel?</Text>
+        <View style={{ marginTop: 40 }}>
+          <StepperControl value={answers.packPrice.toFixed(2)} suffix="€" onDecrement={() => setAnswers(p => ({ ...p, packPrice: Math.max(4, p.packPrice - 0.50) }))} onIncrement={() => setAnswers(p => ({ ...p, packPrice: Math.min(20, p.packPrice + 0.50) }))} />
+          <QuickChips options={[7, 8, 9, 10, 12, 15]} current={answers.packPrice} onSelect={(val) => setAnswers(p => ({ ...p, packPrice: val }))} />
+
+          {/* Pain Feedback */}
+          <Text style={{ textAlign: 'center', marginTop: 20, color: PALETTE.dark.error, fontSize: 13, fontFamily: 'Inter_500Medium', opacity: 0.8 }}>
+            Das sind {Math.round(yearlyCost).toLocaleString('de-DE')}€, die du jährlich verbrennst.
+          </Text>
         </View>
-      );
+        <View style={styles.bottomAction}>
+          <PrimaryButton onPress={handleNext} title="Weiter" />
+        </View>
+      </View>
+    );
   };
 
   const renderMotivation = () => (
     <View style={[styles.contentContainer, { paddingHorizontal: SPACING.l }]}>
       <Text style={styles.question}>Was ist dein Hauptgrund?</Text>
       <View style={{ marginTop: 20 }}>
-        <OptionCard title="Gesundheit & Fitness" icon="heart" selected={answers.motivation === 'health'} onPress={() => { setAnswers(prev => ({...prev, motivation: 'health'})); handleNext(); }} />
-        <OptionCard title="Geld sparen" icon="wallet" selected={answers.motivation === 'money'} onPress={() => { setAnswers(prev => ({...prev, motivation: 'money'})); handleNext(); }} />
-        <OptionCard title="Familie & Freunde" icon="people" selected={answers.motivation === 'family'} onPress={() => { setAnswers(prev => ({...prev, motivation: 'family'})); handleNext(); }} />
-        <OptionCard title="Freiheit von Sucht" icon="lock-open" selected={answers.motivation === 'freedom'} onPress={() => { setAnswers(prev => ({...prev, motivation: 'freedom'})); handleNext(); }} />
+        <OptionCard title="Gesundheit & Fitness" icon="heart" selected={answers.motivation === 'health'} onPress={() => { setAnswers(prev => ({ ...prev, motivation: 'health' })); handleNext(); }} />
+        <OptionCard title="Geld sparen" icon="wallet" selected={answers.motivation === 'money'} onPress={() => { setAnswers(prev => ({ ...prev, motivation: 'money' })); handleNext(); }} />
+        <OptionCard title="Familie & Freunde" icon="people" selected={answers.motivation === 'family'} onPress={() => { setAnswers(prev => ({ ...prev, motivation: 'family' })); handleNext(); }} />
+        <OptionCard title="Freiheit von Sucht" icon="lock-open" selected={answers.motivation === 'freedom'} onPress={() => { setAnswers(prev => ({ ...prev, motivation: 'freedom' })); handleNext(); }} />
       </View>
     </View>
   );
@@ -664,22 +696,22 @@ export default function OnboardingScreen() {
   const renderAnalysis = () => (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING.l }}>
       <View style={{ width: 80, height: 80, marginBottom: 40 }}>
-          <Ionicons name={analysisIcon} size={80} color={PALETTE.dark.primary} />
+        <Ionicons name={analysisIcon} size={80} color={PALETTE.dark.primary} />
       </View>
       <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 24, color: PALETTE.dark.text, textAlign: 'center', marginBottom: SPACING.s }}>{analysisText}</Text>
       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: PALETTE.dark.textMuted, textAlign: 'center', minHeight: 40 }}>{analysisSubtext}</Text>
       <View style={{ width: '100%', height: 6, backgroundColor: PALETTE.dark.surfaceHighlight, borderRadius: 3, marginTop: 40, overflow: 'hidden' }}>
-         <Animated.View style={{ flex: 1, width: analysisProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), backgroundColor: PALETTE.dark.primary }} />
+        <Animated.View style={{ flex: 1, width: analysisProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), backgroundColor: PALETTE.dark.primary }} />
       </View>
     </View>
   );
 
   const FeatureRow = ({ text }) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-        <View style={{ backgroundColor: 'rgba(45, 212, 191, 0.1)', padding: 4, borderRadius: 10 }}>
-            <Ionicons name="checkmark" size={16} color={PALETTE.dark.primary} />
-        </View>
-        <Text style={{ color: PALETTE.dark.text, fontSize: 14, fontFamily: 'Inter_500Medium', flex: 1 }}>{text}</Text>
+      <View style={{ backgroundColor: 'rgba(45, 212, 191, 0.1)', padding: 4, borderRadius: 10 }}>
+        <Ionicons name="checkmark" size={16} color={PALETTE.dark.primary} />
+      </View>
+      <Text style={{ color: PALETTE.dark.text, fontSize: 14, fontFamily: 'Inter_500Medium', flex: 1 }}>{text}</Text>
     </View>
   );
 
@@ -688,20 +720,24 @@ export default function OnboardingScreen() {
     const cigsPerDay = answers.cigarettesPerDay;
     const packSize = answers.cigarettesPerPack || 20;
     const price = answers.packPrice;
-    
+
     // REVENUECAT DATA
     const yearlyPkg = offerings?.annual;
     const weeklyPkg = offerings?.weekly;
-    
+
     const yearlyPriceStr = yearlyPkg?.product?.priceString || "29,99 €";
     const weeklyPriceStr = weeklyPkg?.product?.priceString || "5,99 €";
-    
+
     const yearlyPriceNum = yearlyPkg?.product?.price || 29.99;
     const weeklyPriceNum = weeklyPkg?.product?.price || 5.99;
-    
+
+    // Only show free trial badge/text if RevenueCat actually has a trial configured.
+    // Hardcoding "3 days free" when no trial exists is an Apple rejection risk + legal issue.
+    const weeklyHasTrial = weeklyPkg?.product?.introductoryDiscount != null;
+
     // Berechne Brutto-Ersparnis für 1 Jahr
     const rawSavings = Math.round((cigsPerDay / packSize * price) * 365);
-    
+
     // Abo-Kosten abziehen (Jahresabo vs. Wochenabo auf ein Jahr)
     const subscriptionCost = selectedPlan === 'yearly' ? yearlyPriceNum : (weeklyPriceNum * 52);
     const oneYearSavings = Math.max(0, Math.round(rawSavings - subscriptionCost));
@@ -711,185 +747,205 @@ export default function OnboardingScreen() {
 
     return (
       <View style={{ flex: 1 }}>
-         {/* CLEANER BACKGROUND: Subtiler Gradient von oben */}
-         <View style={StyleSheet.absoluteFill} pointerEvents="none">
-             <LinearGradient
-                colors={['rgba(45, 212, 191, 0.08)', 'transparent']}
-                style={{ width: '100%', height: 500 }}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
-             />
-         </View>
+        {/* CLEANER BACKGROUND: Subtiler Gradient von oben */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <LinearGradient
+            colors={['rgba(45, 212, 191, 0.08)', 'transparent']}
+            style={{ width: '100%', height: 500 }}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+          />
+        </View>
 
-        <ScrollView 
-            contentContainerStyle={{ paddingBottom: 40, paddingTop: 0 }} 
-            showsVerticalScrollIndicator={false}
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 40, paddingTop: 0 }}
+          showsVerticalScrollIndicator={false}
         >
-            {/* HEADER NEU: Premium & Clean */}
-            <View style={{ alignItems: 'center', marginTop: 80, marginBottom: 40, paddingHorizontal: 20 }}>
-                <View style={{ 
-                    width: 72, height: 72, 
-                    borderRadius: 24, 
-                    backgroundColor: '#1A1F2B',
-                    alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1, borderColor: 'rgba(45, 212, 191, 0.2)',
-                    marginBottom: 24,
-                    shadowColor: PALETTE.dark.primary,
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 24
-                }}>
-                    <Ionicons name="star" size={32} color={PALETTE.dark.primary} />
-                </View>
-                
-                <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 28, color: '#FFF', textAlign: 'center', marginBottom: 12, lineHeight: 36 }}>
-                  Entfessele dein{'\n'}volles Potenzial.
-                </Text>
-                
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: PALETTE.dark.textSecondary, textAlign: 'center', lineHeight: 24, maxWidth: 300 }}>
-                   Nutze wissenschaftliche Methoden, um dauerhaft rauchfrei zu bleiben.
-                </Text>
+          {/* HEADER NEU: Premium & Clean */}
+          <View style={{ alignItems: 'center', marginTop: 80, marginBottom: 40, paddingHorizontal: 20 }}>
+            <View style={{
+              width: 72, height: 72,
+              borderRadius: 24,
+              backgroundColor: '#1A1F2B',
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 1, borderColor: 'rgba(45, 212, 191, 0.2)',
+              marginBottom: 24,
+              shadowColor: PALETTE.dark.primary,
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.15,
+              shadowRadius: 24
+            }}>
+              <Ionicons name="star" size={32} color={PALETTE.dark.primary} />
             </View>
 
-            {/* Emotionaler Kontext: Ersparnis */}
-            <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
-                <View style={{ 
-                    backgroundColor: 'rgba(16, 185, 129, 0.05)', 
-                    borderRadius: RADIUS.l, 
-                    padding: SPACING.l, 
-                    borderWidth: 1, 
-                    borderColor: 'rgba(16, 185, 129, 0.2)',
-                    alignItems: 'center',
-                    overflow: 'hidden' // Important for contained glow
-                }}>
-                    <View style={{ position: 'absolute', top: -50, right: -50, width: 150, height: 150, backgroundColor: PALETTE.dark.success, opacity: 0.1, borderRadius: 75 }} />
-                    
-                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: PALETTE.dark.textSecondary, textAlign: 'center', marginBottom: 4 }}>
-                        Dein Gewinn <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold' }}>NUR</Text> im ersten Jahr
-                    </Text>
-                    
-                    <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 42, color: PALETTE.dark.success, marginVertical: 4 }}>
-                        {oneYearSavings.toLocaleString('de-DE')}€
-                    </Text>
-                    
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: PALETTE.dark.textSecondary, marginTop: 4, textAlign: 'center' }}>
-                        Investiere in deine Träume, nicht in Rauch.
-                    </Text>
-                </View>
-            </View>
-            
-             {/* Preis-Anker: App Kosten vs Zigaretten */}
-             <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
-                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: PALETTE.dark.textMuted, textAlign: 'center', marginBottom: 16 }}>
-                     Die App kostet dich im Jahr weniger als:
-                 </Text>
-                 <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20 }}>
-                     <View style={{ alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, minWidth: 100 }}>
-                         <Ionicons name="cube" size={24} color={PALETTE.dark.error} style={{ marginBottom: 4 }} />
-                         <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 16 }}>~{packsEquivalent}</Text>
-                         <Text style={{ fontSize: 10, color: PALETTE.dark.textSecondary }}>Schachteln</Text>
-                     </View>
-                     <Text style={{ color: PALETTE.dark.textMuted, fontFamily: 'Inter_600SemiBold' }}>vs.</Text>
-                     <View style={{ alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.05)', padding: 12, borderRadius: 16, minWidth: 100, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.2)' }}>
-                         <Ionicons name="heart-circle" size={28} color={PALETTE.dark.primary} style={{ marginBottom: 0 }} />
-                         <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 16 }}>Freiheit</Text>
-                         <Text style={{ fontSize: 10, color: PALETTE.dark.textSecondary }}>Für immer</Text>
-                     </View>
-                 </View>
-             </View>
+            <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 28, color: '#FFF', textAlign: 'center', marginBottom: 12, lineHeight: 36 }}>
+              Entfessele dein{'\n'}volles Potenzial.
+            </Text>
 
-            {/* Feature List */}
-            <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
-                <FeatureRow text="Exakter Ersparnis- & Zeit-Rechner" />
-                <FeatureRow text="Lückenloses Erfolgs-Tracking" />
-                <FeatureRow text="Motivierende Statistik-Übersicht" />
-                <FeatureRow text="Gesundheits-Fortschritt Visualisierung" />
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: PALETTE.dark.textSecondary, textAlign: 'center', lineHeight: 24, maxWidth: 300 }}>
+              Nutze wissenschaftliche Methoden, um dauerhaft rauchfrei zu bleiben.
+            </Text>
+          </View>
+
+          {/* Emotionaler Kontext: Ersparnis */}
+          <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
+            <View style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.05)',
+              borderRadius: RADIUS.l,
+              padding: SPACING.l,
+              borderWidth: 1,
+              borderColor: 'rgba(16, 185, 129, 0.2)',
+              alignItems: 'center',
+              overflow: 'hidden' // Important for contained glow
+            }}>
+              <View style={{ position: 'absolute', top: -50, right: -50, width: 150, height: 150, backgroundColor: PALETTE.dark.success, opacity: 0.1, borderRadius: 75 }} />
+
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: PALETTE.dark.textSecondary, textAlign: 'center', marginBottom: 4 }}>
+                Dein Gewinn <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold' }}>NUR</Text> im ersten Jahr
+              </Text>
+
+              <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 42, color: PALETTE.dark.success, marginVertical: 4 }}>
+                {oneYearSavings.toLocaleString('de-DE')}€
+              </Text>
+
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: PALETTE.dark.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                Investiere in deine Träume, nicht in Rauch.
+              </Text>
+            </View>
+          </View>
+
+          {/* Preis-Anker: App Kosten vs Zigaretten */}
+          <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: PALETTE.dark.textMuted, textAlign: 'center', marginBottom: 16 }}>
+              Die App kostet dich im Jahr weniger als:
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20 }}>
+              <View style={{ alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, minWidth: 100 }}>
+                <Ionicons name="cube" size={24} color={PALETTE.dark.error} style={{ marginBottom: 4 }} />
+                <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 16 }}>~{packsEquivalent}</Text>
+                <Text style={{ fontSize: 10, color: PALETTE.dark.textSecondary }}>Schachteln</Text>
+              </View>
+              <Text style={{ color: PALETTE.dark.textMuted, fontFamily: 'Inter_600SemiBold' }}>vs.</Text>
+              <View style={{ alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.05)', padding: 12, borderRadius: 16, minWidth: 100, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                <Ionicons name="heart-circle" size={28} color={PALETTE.dark.primary} style={{ marginBottom: 0 }} />
+                <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 16 }}>Freiheit</Text>
+                <Text style={{ fontSize: 10, color: PALETTE.dark.textSecondary }}>Für immer</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Feature List */}
+          <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
+            <FeatureRow text="Exakter Ersparnis- & Zeit-Rechner" />
+            <FeatureRow text="Lückenloses Erfolgs-Tracking" />
+            <FeatureRow text="Motivierende Statistik-Übersicht" />
+            <FeatureRow text="Gesundheits-Fortschritt Visualisierung" />
+          </View>
+
+          {/* Pricing Options */}
+          <View style={{ paddingHorizontal: SPACING.l, gap: 12, marginBottom: 30 }}>
+            {isLoadingPrice ? (
+              <ActivityIndicator size="large" color={PALETTE.dark.primary} style={{ marginVertical: 20 }} />
+            ) : (
+              <>
+                <PlanOption
+                  title="Jahres-Mitgliedschaft"
+                  price={`${yearlyPriceStr} / Jahr`}
+                  subtext="Das beste Angebot für deinen Erfolg"
+                  badge="BELIEBTESTE WAHL"
+                  sticker="BELIEBT"
+                  selected={selectedPlan === 'yearly'}
+                  onPress={() => setSelectedPlan('yearly')}
+                />
+                <PlanOption
+                  title="Wöchentlich"
+                  price={`${weeklyPriceStr} / Woche`}
+                  subtext={weeklyHasTrial ? "Volle Flexibilität. 3 Tage kostenlos testen." : "Volle Flexibilität. Jederzeit kündbar."}
+                  badge={weeklyHasTrial ? "3 TAGE GRATIS" : "FLEXIBEL"}
+                  badgeColor={PALETTE.dark.success}
+                  selected={selectedPlan === 'weekly'}
+                  onPress={() => setSelectedPlan('weekly')}
+                />
+              </>
+            )}
+          </View>
+
+          {/* Footer Action */}
+          <View style={{ paddingHorizontal: SPACING.l, marginBottom: 20 }}>
+            <View style={{ alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ color: PALETTE.dark.textSecondary, fontSize: 12, marginBottom: 4 }}>
+                {selectedPlan === 'yearly'
+                  ? `${yearlyPriceStr} / Jahr. Sofortiger Zugriff.`
+                  : `${weeklyPriceStr} / Woche nach 3 kostenlosen Test-Tagen.`}
+              </Text>
             </View>
 
-            {/* Pricing Options */}
-            <View style={{ paddingHorizontal: SPACING.l, gap: 12, marginBottom: 30 }}>
-                {isLoadingPrice ? (
-                    <ActivityIndicator size="large" color={PALETTE.dark.primary} style={{ marginVertical: 20 }} />
+            <TouchableOpacity onPress={handlePurchase} activeOpacity={0.9} disabled={isPurchasing || isLoadingPrice}>
+              <LinearGradient
+                colors={[PALETTE.dark.primary, '#2DD4BF']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={{
+                  borderRadius: RADIUS.full,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  shadowColor: PALETTE.dark.primary,
+                  shadowOpacity: 0.4,
+                  shadowRadius: 20,
+                  shadowOffset: { width: 0, height: 8 },
+                  opacity: (isPurchasing || isLoadingPrice) ? 0.7 : 1
+                }}
+              >
+                {isPurchasing ? (
+                  <ActivityIndicator color="#121217" />
                 ) : (
-                    <>
-                        <PlanOption 
-                            title="Jahres-Mitgliedschaft" 
-                            price={`${yearlyPriceStr} / Jahr`}
-                            originalPrice="199,99 €" // Fake Anchor High
-                            subtext="Das beste Angebot für deinen Erfolg"
-                            badge="SPARE 90%"
-                            sticker="BELIEBT"
-                            selected={selectedPlan === 'yearly'}
-                            onPress={() => setSelectedPlan('yearly')}
-                        />
-                        <PlanOption 
-                            title="Wöchentlich" 
-                            price={`${weeklyPriceStr} / Woche`} 
-                            subtext="Volle Flexibilität. 3 Tage kostenlos testen."
-                            badge="3 TAGE GRATIS"
-                            badgeColor={PALETTE.dark.success}
-                            selected={selectedPlan === 'weekly'}
-                            onPress={() => setSelectedPlan('weekly')}
-                        />
-                    </>
-                )}
-            </View>
-
-            {/* Footer Action */}
-            <View style={{ paddingHorizontal: SPACING.l, marginBottom: 20 }}>
-                <View style={{ alignItems: 'center', marginBottom: 10 }}>
-                     <Text style={{ color: PALETTE.dark.textSecondary, fontSize: 12, marginBottom: 4 }}>
-                        {selectedPlan === 'yearly' 
-                            ? `${yearlyPriceStr} / Jahr. Sofortiger Zugriff.` 
-                            : `${weeklyPriceStr} / Woche nach 3 kostenlosen Test-Tagen.`}
-                     </Text>
-                </View>
-                
-                <TouchableOpacity onPress={handlePurchase} activeOpacity={0.9} disabled={isPurchasing || isLoadingPrice}>
-                    <LinearGradient 
-                        colors={[PALETTE.dark.primary, '#2DD4BF']} 
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} 
-                        style={{ 
-                            borderRadius: RADIUS.full, 
-                            paddingVertical: 16, 
-                            alignItems: 'center', 
-                            shadowColor: PALETTE.dark.primary, 
-                            shadowOpacity: 0.4, 
-                            shadowRadius: 20, 
-                            shadowOffset: { width: 0, height: 8 },
-                            opacity: (isPurchasing || isLoadingPrice) ? 0.7 : 1
-                        }}
-                    >
-                        {isPurchasing ? (
-                            <ActivityIndicator color="#121217" />
-                        ) : (
-                            <>
-                                <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 17, color: '#121217' }}>
-                                    {selectedPlan === 'yearly' ? "Rauchfreies Leben starten" : "Jetzt 3 Tage gratis testen"}
-                                </Text>
-                                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: 'rgba(0,0,0,0.6)', marginTop: 2 }}>
-                                    {selectedPlan === 'yearly' ? 'Spare langfristig maximal' : 'Jederzeit kündbar in den Einstellungen'}
-                                </Text>
-                            </>
-                        )}
-                    </LinearGradient>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                    onPress={handleRestore} 
-                    style={{ marginTop: 20, padding: 10 }}
-                    disabled={isPurchasing}
-                >
-                    <Text style={{ textAlign: 'center', color: PALETTE.dark.textMuted, fontSize: 12, fontFamily: 'Inter_500Medium', textDecorationLine: 'underline', opacity: isPurchasing ? 0.5 : 1 }}>
-                        Einkäufe wiederherstellen
+                  <>
+                    <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 17, color: '#121217' }}>
+                      {selectedPlan === 'yearly' ? "Rauchfreies Leben starten" : (weeklyHasTrial ? "Jetzt 3 Tage gratis testen" : "Jetzt starten")}
                     </Text>
-                </TouchableOpacity>
-                
-                <Text style={{ textAlign: 'center', color: PALETTE.dark.textSecondary, fontSize: 10, marginTop: 10 }}>
-                    Abo verlängert sich automatisch. Kündbar bis 24h vor Ablauf.
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: 'rgba(0,0,0,0.6)', marginTop: 2 }}>
+                      {selectedPlan === 'yearly' ? 'Spare langfristig maximal' : 'Jederzeit kündbar in den Einstellungen'}
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleRestore}
+              style={{ marginTop: 20, padding: 10 }}
+              disabled={isPurchasing}
+            >
+              <Text style={{ textAlign: 'center', color: PALETTE.dark.textMuted, fontSize: 12, fontFamily: 'Inter_500Medium', textDecorationLine: 'underline', opacity: isPurchasing ? 0.5 : 1 }}>
+                Einkäufe wiederherstellen
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={{ textAlign: 'center', color: PALETTE.dark.textSecondary, fontSize: 10, marginTop: 10 }}>
+              Abo verlängert sich automatisch. Kündbar bis 24h vor Ablauf.
+            </Text>
+
+            {/* Apple-Pflicht: EULA + Datenschutz Links (Guideline 3.1.2) */}
+            <View style={{ marginTop: 16, alignItems: 'center', paddingHorizontal: 10 }}>
+              <Text style={{ color: PALETTE.dark.textMuted, fontSize: 10, textAlign: 'center', lineHeight: 18 }}>
+                Mit dem Kauf stimmst du den{' '}
+                <Text
+                  style={{ textDecorationLine: 'underline', color: PALETTE.dark.textSecondary }}
+                  onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}
+                >
+                  Nutzungsbedingungen (EULA)
                 </Text>
+                {' '}und der{' '}
+                <Text
+                  style={{ textDecorationLine: 'underline', color: PALETTE.dark.textSecondary }}
+                  onPress={() => Linking.openURL('https://nicht-rauchen-privacy.netlify.app/privacy-policy.html')}
+                >
+                  Datenschutzerklärung
+                </Text>
+                {' '}zu.
+              </Text>
             </View>
-            
+          </View>
+
         </ScrollView>
       </View>
     );
@@ -898,61 +954,61 @@ export default function OnboardingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#121217' }}>
       <Stack.Screen options={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: '#121217' } }} />
-      
+
       {/* GLOBAL PARTICLES */}
       <BackgroundParticles />
 
       <View style={{ flex: 1, paddingTop: step === 11 ? 0 : 60, paddingBottom: 34 }}>
-          {step > 0 && step < 11 && !isAnalyzing && (
-             <View style={{ marginBottom: 30, paddingHorizontal: SPACING.l }}>
-               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <TouchableOpacity onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="arrow-back" size={24} color={PALETTE.dark.text} />
-                  </TouchableOpacity>
-                  <View style={{ width: 24 }} /> 
-               </View>
-               <ProgressBar progress={Math.min(1, step / 11)} />
-             </View>
-          )}
+        {step > 0 && step < 11 && !isAnalyzing && (
+          <View style={{ marginBottom: 30, paddingHorizontal: SPACING.l }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <TouchableOpacity onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="arrow-back" size={24} color={PALETTE.dark.text} />
+              </TouchableOpacity>
+              <View style={{ width: 24 }} />
+            </View>
+            <ProgressBar progress={Math.min(1, step / 11)} />
+          </View>
+        )}
 
-          <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-            {isAnalyzing ? renderAnalysis() : (
-              <>
-                {step === 0 && <View style={{ flex: 1, paddingHorizontal: SPACING.l }}>{renderIntro()}</View>}
-                {step === 1 && renderMotivation()}
-                {step === 2 && renderInterstitial({
-                  icon: 'star',
-                  title: 'Exzellenter Grund.',
-                  text: 'Wenn du weißt, WARUM du aufhörst, ist das WIE viel einfacher. Wir behalten dein Ziel fest im Blick.',
-                  buttonText: 'Weiter'
-                })}
-                {step === 3 && renderDuration()}
-                {step === 4 && renderInterstitial({
-                  icon: 'fitness',
-                  title: 'Starker Wille.',
-                  text: 'Dein Körper ist ein Wunderwerk. Schon 20 Minuten nach der letzten Zigarette beginnt er, sich zu heilen. Wir unterstützen dich dabei, diesen Weg konsequent zu gehen.',
-                  buttonText: 'Weiter so'
-                })}
-                {step === 5 && renderAmount()}
-                {step === 6 && renderInterstitial({
-                  icon: 'trophy',
-                  title: 'Du bist nicht allein.',
-                  text: 'Der durchschnittliche Nutzer braucht 3 Versuche. Mit unserem wissenschaftlichen System klappt es diesmal endgültig.',
-                  buttonText: 'Ich schaffe das'
-                })}
-                {step === 7 && renderPackSize()}
-                {step === 8 && renderInterstitial({
-                  icon: 'cash',
-                  title: 'Teure Gewohnheit.',
-                  text: 'Tabakpreise steigen jedes Jahr. Wir rechnen gleich mal aus, was dich das wirklich kostet.',
-                  buttonText: 'Zur Berechnung'
-                })}
-                {step === 9 && renderCost()}
-                {step === 10 && renderContract()}
-                {step === 11 && renderPaywall()}
-              </>
-            )}
-          </Animated.View>
+        <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+          {isAnalyzing ? renderAnalysis() : (
+            <>
+              {step === 0 && <View style={{ flex: 1, paddingHorizontal: SPACING.l }}>{renderIntro()}</View>}
+              {step === 1 && renderMotivation()}
+              {step === 2 && renderInterstitial({
+                icon: 'star',
+                title: 'Exzellenter Grund.',
+                text: 'Wenn du weißt, WARUM du aufhörst, ist das WIE viel einfacher. Wir behalten dein Ziel fest im Blick.',
+                buttonText: 'Weiter'
+              })}
+              {step === 3 && renderDuration()}
+              {step === 4 && renderInterstitial({
+                icon: 'fitness',
+                title: 'Starker Wille.',
+                text: 'Dein Körper ist ein Wunderwerk. Schon 20 Minuten nach der letzten Zigarette beginnt er, sich zu heilen. Wir unterstützen dich dabei, diesen Weg konsequent zu gehen.',
+                buttonText: 'Weiter so'
+              })}
+              {step === 5 && renderAmount()}
+              {step === 6 && renderInterstitial({
+                icon: 'trophy',
+                title: 'Du bist nicht allein.',
+                text: 'Der durchschnittliche Nutzer braucht 3 Versuche. Mit unserem wissenschaftlichen System klappt es diesmal endgültig.',
+                buttonText: 'Ich schaffe das'
+              })}
+              {step === 7 && renderPackSize()}
+              {step === 8 && renderInterstitial({
+                icon: 'cash',
+                title: 'Teure Gewohnheit.',
+                text: 'Tabakpreise steigen jedes Jahr. Wir rechnen gleich mal aus, was dich das wirklich kostet.',
+                buttonText: 'Zur Berechnung'
+              })}
+              {step === 9 && renderCost()}
+              {step === 10 && renderContract()}
+              {step === 11 && renderPaywall()}
+            </>
+          )}
+        </Animated.View>
       </View>
     </View>
   );

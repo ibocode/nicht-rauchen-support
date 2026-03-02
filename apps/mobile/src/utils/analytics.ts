@@ -8,6 +8,12 @@ const MAX_EVENTS_PER_SESSION = 100;
 const MAX_SESSIONS = 50;
 
 class AnalyticsService {
+  private sessionId: string | null;
+  private sessionStartTime: string | null;
+  private events: Array<Record<string, any>>;
+  private isEnabled: boolean;
+  private userId: string | null;
+
   constructor() {
     this.sessionId = null;
     this.sessionStartTime = null;
@@ -16,23 +22,42 @@ class AnalyticsService {
     this.userId = null;
   }
 
+  // Bereinigt Properties vor nativen Aufrufen:
+  // null/undefined → 'unknown' (verhindert NSInvalidArgumentException in iOS NSDictionary)
+  sanitizeProperties(properties: Record<string, any>): Record<string, any> {
+    const sanitized: Record<string, any> = {};
+    for (const [key, value] of Object.entries(properties)) {
+      if (value === null || value === undefined) {
+        sanitized[key] = 'unknown';
+      } else if (typeof value === 'object' && !Array.isArray(value)) {
+        // Rekursiv für verschachtelte Objekte
+        sanitized[key] = this.sanitizeProperties(value);
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    return sanitized;
+  }
+
   // Initialisierung
   async initialize() {
     try {
       // Generiere Session ID
       this.sessionId = this.generateSessionId();
       this.sessionStartTime = new Date().toISOString();
-      
+
       // Lade bestehende Analytics-Daten
       await this.loadAnalyticsData();
-      
-      // Track App-Start Event
+
+      // CRASH-FIX: Device.*-Werte können null sein (expo-device gibt null zurück
+      // wenn das Gerät die Info nicht liefert). null in iOS NSDictionary → SIGABRT.
+      // Alle Werte mit ?? 'unknown' absichern.
       await this.trackEvent('app_start', {
-        platform: Platform.OS,
-        device_type: Device.deviceType,
-        os_version: Device.osVersion,
+        platform: Platform.OS ?? 'unknown',
+        device_type: Device.deviceType ?? 'unknown',
+        os_version: Device.osVersion ?? 'unknown',
         app_version: '1.0.0',
-        session_id: this.sessionId
+        session_id: this.sessionId ?? 'unknown',
       });
 
       console.log('Analytics initialized successfully');
@@ -81,20 +106,25 @@ class AnalyticsService {
   }
 
   // Event tracken
-  async trackEvent(eventName, properties = {}) {
+  // CRASH-FIX: sanitizeProperties() wird auf ALLE Properties angewendet bevor
+  // sie die native iOS-Bridge passieren. Verhindert NSInvalidArgumentException.
+  async trackEvent(eventName: string, properties: Record<string, any> = {}) {
     if (!this.isEnabled) return;
 
     try {
+      // Alle Properties sanitizen (null/undefined → 'unknown')
+      const sanitizedProperties = this.sanitizeProperties({
+        ...properties,
+        timestamp: new Date().toISOString(),
+        session_id: this.sessionId ?? 'unknown',
+        user_id: this.userId ?? 'unknown',
+        platform: Platform.OS ?? 'unknown',
+      });
+
       const event = {
         id: this.generateEventId(),
-        name: eventName,
-        properties: {
-          ...properties,
-          timestamp: new Date().toISOString(),
-          session_id: this.sessionId,
-          user_id: this.userId,
-          platform: Platform.OS
-        }
+        name: eventName ?? 'unknown_event',
+        properties: sanitizedProperties,
       };
 
       this.events.push(event);
@@ -126,12 +156,12 @@ class AnalyticsService {
   }
 
   // User ID setzen
-  async setUserId(userId) {
+  async setUserId(userId: string | null) {
     this.userId = userId;
     await this.saveAnalyticsData();
-    
+
     await this.trackEvent('user_identified', {
-      user_id: userId
+      user_id: userId ?? 'unknown'
     });
   }
 
@@ -139,70 +169,72 @@ class AnalyticsService {
   async clearUserId() {
     this.userId = null;
     await this.saveAnalyticsData();
-    
+
     await this.trackEvent('user_logged_out');
   }
 
   // Screen View tracken
-  async trackScreenView(screenName, properties = {}) {
+  async trackScreenView(screenName: string, properties: Record<string, any> = {}) {
     return await this.trackEvent('screen_view', {
-      screen_name: screenName,
+      screen_name: screenName ?? 'unknown',
       ...properties
     });
   }
 
   // User Action tracken
-  async trackUserAction(action, properties = {}) {
+  async trackUserAction(action: string, properties: Record<string, any> = {}) {
     return await this.trackEvent('user_action', {
-      action,
+      action: action ?? 'unknown',
       ...properties
     });
   }
 
   // Error tracken
-  async trackError(error, properties = {}) {
+  async trackError(error: Error | string, properties: Record<string, any> = {}) {
+    const err = error as any;
     return await this.trackEvent('error', {
-      error_message: error.message || error,
-      error_stack: error.stack || null,
+      error_message: err?.message || String(error) || 'unknown',
+      // CRASH-FIX: error.stack kann null/undefined sein → 'unknown' statt null
+      error_stack: err?.stack ?? 'unknown',
       ...properties
     });
   }
 
   // Performance Metriken tracken
-  async trackPerformance(metricName, value, properties = {}) {
+  async trackPerformance(metricName: string, value: number, properties: Record<string, any> = {}) {
     return await this.trackEvent('performance', {
-      metric_name: metricName,
-      metric_value: value,
+      metric_name: metricName ?? 'unknown',
+      metric_value: value ?? 0,
       ...properties
     });
   }
 
   // App-spezifische Events
-  async trackCheckIn(status, streak) {
+  async trackCheckIn(status: string, streak: number) {
     return await this.trackEvent('check_in', {
-      status, // 'success' oder 'smoked'
-      current_streak: streak,
+      status: status ?? 'unknown',
+      current_streak: streak ?? 0,
       check_in_time: new Date().toISOString()
     });
   }
 
-  async trackStreakMilestone(milestone) {
+  async trackStreakMilestone(milestone: number | string) {
     return await this.trackEvent('streak_milestone', {
-      milestone,
+      milestone: milestone ?? 'unknown',
       achievement_time: new Date().toISOString()
     });
   }
 
-  async trackNotificationReceived(notificationType) {
+  async trackNotificationReceived(notificationType: string) {
     return await this.trackEvent('notification_received', {
-      notification_type: notificationType,
+      notification_type: notificationType ?? 'unknown',
       received_time: new Date().toISOString()
     });
   }
 
-  async trackNotificationOpened(notificationType) {
+  async trackNotificationOpened(notificationType: string) {
     return await this.trackEvent('notification_opened', {
-      notification_type: notificationType,
+      notification_type: notificationType ?? 'unknown',
       opened_time: new Date().toISOString()
     });
   }
@@ -216,7 +248,7 @@ class AnalyticsService {
       if (!__DEV__) {
         // Beispiel: Send to analytics service
         console.log('Would send events to analytics service:', this.events);
-        
+
         // Nach erfolgreichem Senden: Events löschen
         this.events = [];
       } else {
@@ -231,8 +263,13 @@ class AnalyticsService {
   // Session beenden
   async endSession() {
     try {
+      // CRASH-FIX: this.sessionStartTime kann null sein → Date(null) wirft keinen Fehler
+      // gibt aber 0 zurück → Fallback auf 0 wenn nicht gesetzt
+      const sessionDuration = this.sessionStartTime
+        ? Date.now() - new Date(this.sessionStartTime).getTime()
+        : 0;
       await this.trackEvent('session_end', {
-        session_duration: Date.now() - new Date(this.sessionStartTime).getTime(),
+        session_duration: sessionDuration,
         events_count: this.events.length
       });
 
@@ -244,7 +281,7 @@ class AnalyticsService {
   }
 
   // Analytics aktivieren/deaktivieren
-  setEnabled(enabled) {
+  setEnabled(enabled: boolean) {
     this.isEnabled = enabled;
   }
 
