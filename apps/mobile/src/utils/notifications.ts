@@ -63,7 +63,7 @@ export const notificationService = {
   },
 
   // --- LATE REMINDER (23:00 Uhr - Nur wenn noch nicht eingecheckt) ---
-  
+
   async scheduleLateReminder() {
     try {
       const { status } = await Notifications.getPermissionsAsync();
@@ -72,13 +72,24 @@ export const notificationService = {
       // Check if already handled today
       const todayStatus = await quitData.getDayStatus();
       if (todayStatus) {
-          // Wenn heute schon Status gesetzt, dann sicherstellen, dass wir erst morgen erinnern
-          await this.resolveLateReminder();
-          return;
+        // Wenn heute schon Status gesetzt, planen wir den Reminder für MORGEN 23:00
+        await this.resolveLateReminder();
+        return;
       }
 
       await Notifications.cancelScheduledNotificationAsync(LATE_REMINDER_ID);
-      
+
+      // EXAKTES Datum für HEUTE 23:00 finden (um immediate fires zu verhindern)
+      const triggerDate = new Date();
+      triggerDate.setHours(23, 0, 0, 0);
+
+      // Falls es schon NACH 23:00 Uhr ist, brauchen wir für heute keinen Reminder mehr planen.
+      if (triggerDate.getTime() < Date.now()) {
+        // Direkt für morgen planen
+        await this.resolveLateReminder();
+        return;
+      }
+
       await Notifications.scheduleNotificationAsync({
         identifier: LATE_REMINDER_ID,
         content: {
@@ -88,10 +99,9 @@ export const notificationService = {
           priority: Notifications.AndroidNotificationPriority.HIGH,
           data: { screen: 'today' },
         },
-        trigger: { 
-          hour: 23, 
-          minute: 0, 
-          repeats: true 
+        trigger: {
+          date: triggerDate,
+          type: Notifications.SchedulableTriggerInputTypes.DATE
         },
       });
     } catch (e) {
@@ -101,10 +111,14 @@ export const notificationService = {
 
   async resolveLateReminder() {
     try {
-       await Notifications.cancelScheduledNotificationAsync(LATE_REMINDER_ID);
-       
-       // Schedule for daily 23:00 (repeating)
-       await Notifications.scheduleNotificationAsync({
+      await Notifications.cancelScheduledNotificationAsync(LATE_REMINDER_ID);
+
+      // Schedule for tomorrow 23:00 (specifically for tomorrow, avoiding immediate trigger bugs)
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(23, 0, 0, 0);
+
+      await Notifications.scheduleNotificationAsync({
         identifier: LATE_REMINDER_ID,
         content: {
           title: 'Der Tag ist fast vorbei... 🌙',
@@ -113,39 +127,38 @@ export const notificationService = {
           priority: Notifications.AndroidNotificationPriority.HIGH,
           data: { screen: 'today' },
         },
-        trigger: { 
-          hour: 23, 
-          minute: 0, 
-          repeats: true 
+        trigger: {
+          date: tomorrow, // Einmalig morgen um 23:00
+          type: Notifications.SchedulableTriggerInputTypes.DATE
         },
       });
-      
+
     } catch (e) {
       console.log('Error resolving late reminder:', e);
     }
   },
-  
+
   async scheduleMilestoneReminder(days) {
     try {
       const { status } = await Notifications.getPermissionsAsync();
       if (status !== 'granted') return;
-      
+
       const triggerDate = new Date();
       triggerDate.setDate(triggerDate.getDate() + 1);
       triggerDate.setHours(9, 0, 0, 0);
-      
+
       let title = "Großer Tag voraus! 🚀";
       let body = `Morgen erreichst du ${days} Tage rauchfrei! Bleib stark!`;
-      
+
       if (days === 7) {
-         title = "Eine Woche fast geschafft! 🎉";
-         body = "Morgen ist es soweit: 1 Woche rauchfrei! Du bist großartig.";
+        title = "Eine Woche fast geschafft! 🎉";
+        body = "Morgen ist es soweit: 1 Woche rauchfrei! Du bist großartig.";
       } else if (days === 30) {
-         title = "Fast 1 Monat! 🌟";
-         body = "Nur noch 1 Tag bis zum 1-Monats-Meilenstein. Unglaublich!";
+        title = "Fast 1 Monat! 🌟";
+        body = "Nur noch 1 Tag bis zum 1-Monats-Meilenstein. Unglaublich!";
       } else if (days === 365) {
-         title = "Das Jahr ist fast voll! 🏆";
-         body = "Morgen bist du 1 Jahr rauchfrei. Eine Legende!";
+        title = "Das Jahr ist fast voll! 🏆";
+        body = "Morgen bist du 1 Jahr rauchfrei. Eine Legende!";
       }
 
       await Notifications.scheduleNotificationAsync({
@@ -157,11 +170,14 @@ export const notificationService = {
           priority: Notifications.AndroidNotificationPriority.HIGH,
           data: { screen: 'streak' },
         },
-        trigger: { date: triggerDate },
+        trigger: {
+          date: triggerDate,
+          type: Notifications.SchedulableTriggerInputTypes.DATE
+        },
       });
-      
+
     } catch (e) {
-       console.log('Error scheduling milestone:', e);
+      console.log('Error scheduling milestone:', e);
     }
   },
 
@@ -181,10 +197,10 @@ export const notificationService = {
     const settings = await this.getCheckinSettings();
     settings.enabled = enabled;
     await AsyncStorage.setItem(CHECKIN_STORAGE_KEY, JSON.stringify(settings));
-    
+
     if (enabled) await this.scheduleCheckin(settings.time);
     else await Notifications.cancelScheduledNotificationAsync(CHECKIN_ID);
-    
+
     return true;
   },
 
@@ -192,14 +208,26 @@ export const notificationService = {
     const settings = await this.getCheckinSettings();
     settings.time = { hour, minute };
     await AsyncStorage.setItem(CHECKIN_STORAGE_KEY, JSON.stringify(settings));
-    
+
     if (settings.enabled) await this.scheduleCheckin(settings.time);
     return true;
   },
 
   async scheduleCheckin({ hour, minute }) {
     await Notifications.cancelScheduledNotificationAsync(CHECKIN_ID);
-    
+
+    // Vermeide den (hour/minute, repeats: true) Bug von Expo/iOS, 
+    // der sofort feuert, falls die Checkin-Notification beim Start neu geplant wird.
+    // Wir berechnen den korrekten nächten Zeitpunkt.
+
+    const triggerDate = new Date();
+    triggerDate.setHours(hour, minute, 0, 0);
+
+    // Wenn die Zeit für heute bereits vorbei ist, plane für morgen
+    if (triggerDate.getTime() <= Date.now()) {
+      triggerDate.setDate(triggerDate.getDate() + 1);
+    }
+
     await Notifications.scheduleNotificationAsync({
       identifier: CHECKIN_ID,
       content: {
@@ -209,7 +237,10 @@ export const notificationService = {
         priority: Notifications.AndroidNotificationPriority.HIGH,
         data: { screen: 'today' },
       },
-      trigger: { hour, minute, repeats: true },
+      trigger: {
+        date: triggerDate,
+        type: Notifications.SchedulableTriggerInputTypes.DATE
+      }, // Einmalig (wird beim täglichen App-Start "initializeOnAppStart" wiederholt)
     });
   },
 
@@ -229,82 +260,82 @@ export const notificationService = {
     const settings = await this.getMotivationSettings();
     settings.enabled = enabled;
     await AsyncStorage.setItem(MOTIVATION_STORAGE_KEY, JSON.stringify(settings));
-    
+
     if (enabled) {
-        await this.refillNotifications();
+      await this.refillNotifications();
     } else {
-        await this.cancelAllMotivations();
+      await this.cancelAllMotivations();
     }
-    
+
     return true;
   },
 
   // Helper: Cancel all planned motivation notifications
   async cancelAllMotivations() {
     try {
-        // We cancel all notifications that start with our ID prefix
-        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-        for (const notification of scheduled) {
-            if (notification.identifier.startsWith(MOTIVATION_ID_PREFIX)) {
-                await Notifications.cancelScheduledNotificationAsync(notification.identifier);
-            }
+      // We cancel all notifications that start with our ID prefix
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      for (const notification of scheduled) {
+        if (notification.identifier.startsWith(MOTIVATION_ID_PREFIX)) {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
         }
+      }
     } catch (e) {
-        console.log('Error cancelling motivations:', e);
+      console.log('Error cancelling motivations:', e);
     }
   },
 
   // Main Logic: Schedule random times for the next 7 days
   async refillNotifications() {
     try {
-        // 1. Check if enabled
-        const settings = await this.getMotivationSettings();
-        if (!settings.enabled) return;
+      // 1. Check if enabled
+      const settings = await this.getMotivationSettings();
+      if (!settings.enabled) return;
 
-        // 2. Check frequency (Don't refill if done recently)
-        const lastRefill = await AsyncStorage.getItem(LAST_REFILL_KEY);
-        const now = new Date();
-        
-        if (lastRefill) {
-            const lastRefillDate = new Date(lastRefill);
-            const diffTime = Math.abs(now - lastRefillDate);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            
-            // Wenn vor weniger als 4 Tagen aufgefüllt wurde, abbrechen.
-            // Wir planen 7 Tage im Voraus, also ist Puffer da.
-            if (diffDays < 4) {
-                // console.log('Skipping notification refill, recently updated.');
-                return;
-            }
+      // 2. Check frequency (Don't refill if done recently)
+      const lastRefill = await AsyncStorage.getItem(LAST_REFILL_KEY);
+      const now = new Date();
+
+      if (lastRefill) {
+        const lastRefillDate = new Date(lastRefill);
+        const diffTime = Math.abs(now - lastRefillDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        // Wenn vor weniger als 4 Tagen aufgefüllt wurde, abbrechen.
+        // Wir planen 7 Tage im Voraus, also ist Puffer da.
+        if (diffDays < 4) {
+          // console.log('Skipping notification refill, recently updated.');
+          return;
         }
+      }
 
-        // 3. Cancel old ones to prevent duplicates
-        await this.cancelAllMotivations();
+      // 3. Cancel old ones to prevent duplicates
+      await this.cancelAllMotivations();
 
-        // 4. Schedule for next 7 days
-        
-        for (let i = 1; i <= 7; i++) {
-            const day = new Date(now);
-            day.setDate(day.getDate() + i); // Future days
+      // 4. Schedule for next 7 days
 
-            // Slot 1: 10:00 - 14:00
-            const hour1 = 10 + Math.floor(Math.random() * 4); // 10, 11, 12, 13
-            const min1 = Math.floor(Math.random() * 60);
-            
-            await this.scheduleSingleMotivation(day, hour1, min1, i * 2 - 1);
+      for (let i = 1; i <= 7; i++) {
+        const day = new Date(now);
+        day.setDate(day.getDate() + i); // Future days
 
-            // Slot 2: 16:00 - 20:00
-            const hour2 = 16 + Math.floor(Math.random() * 4); // 16, 17, 18, 19
-            const min2 = Math.floor(Math.random() * 60);
+        // Slot 1: 10:00 - 14:00
+        const hour1 = 10 + Math.floor(Math.random() * 4); // 10, 11, 12, 13
+        const min1 = Math.floor(Math.random() * 60);
 
-            await this.scheduleSingleMotivation(day, hour2, min2, i * 2);
-        }
-        
-        // Update timestamp
-        await AsyncStorage.setItem(LAST_REFILL_KEY, now.toISOString());
-        
+        await this.scheduleSingleMotivation(day, hour1, min1, i * 2 - 1);
+
+        // Slot 2: 16:00 - 20:00
+        const hour2 = 16 + Math.floor(Math.random() * 4); // 16, 17, 18, 19
+        const min2 = Math.floor(Math.random() * 60);
+
+        await this.scheduleSingleMotivation(day, hour2, min2, i * 2);
+      }
+
+      // Update timestamp
+      await AsyncStorage.setItem(LAST_REFILL_KEY, now.toISOString());
+
     } catch (e) {
-        console.log('Error refilling notifications:', e);
+      console.log('Error refilling notifications:', e);
     }
   },
 
@@ -322,7 +353,10 @@ export const notificationService = {
         sound: 'default',
         data: { screen: 'today' },
       },
-      trigger: { date: triggerDate }, // Trigger at specific date/time
+      trigger: {
+        date: triggerDate,
+        type: Notifications.SchedulableTriggerInputTypes.DATE
+      }, // Trigger at specific date/time
     });
   },
 
@@ -341,8 +375,8 @@ export const notificationService = {
   async initializeOnAppStart() {
     const success = await this.initialize();
     if (success) {
-       // Stelle sicher, dass der Late Reminder läuft
-       await this.scheduleLateReminder();
+      // Stelle sicher, dass der Late Reminder läuft
+      await this.scheduleLateReminder();
     }
     return success;
   },

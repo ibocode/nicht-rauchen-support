@@ -762,14 +762,14 @@ export default function OnboardingScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* HEADER NEU: Premium & Clean */}
-          <View style={{ alignItems: 'center', marginTop: 80, marginBottom: 40, paddingHorizontal: 20 }}>
+          <View style={{ alignItems: 'center', marginTop: 80, marginBottom: 30, paddingHorizontal: 20 }}>
             <View style={{
               width: 72, height: 72,
               borderRadius: 24,
               backgroundColor: '#1A1F2B',
               alignItems: 'center', justifyContent: 'center',
               borderWidth: 1, borderColor: 'rgba(45, 212, 191, 0.2)',
-              marginBottom: 24,
+              marginBottom: 20,
               shadowColor: PALETTE.dark.primary,
               shadowOffset: { width: 0, height: 8 },
               shadowOpacity: 0.15,
@@ -778,68 +778,80 @@ export default function OnboardingScreen() {
               <Ionicons name="star" size={32} color={PALETTE.dark.primary} />
             </View>
 
-            <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 28, color: '#FFF', textAlign: 'center', marginBottom: 12, lineHeight: 36 }}>
-              Entfessele dein{'\n'}volles Potenzial.
+            <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 26, color: '#FFF', textAlign: 'center', marginBottom: 12, lineHeight: 34 }}>
+              Dein Weg in die{'\n'}Rauchfreiheit.
             </Text>
 
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: PALETTE.dark.textSecondary, textAlign: 'center', lineHeight: 24, maxWidth: 300 }}>
-              Nutze wissenschaftliche Methoden, um dauerhaft rauchfrei zu bleiben.
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: PALETTE.dark.textSecondary, textAlign: 'center', lineHeight: 24, maxWidth: 320 }}>
+              Werde rauchfrei. Spare tausende Euro. Gewinne deine Lebenszeit zurück.
             </Text>
           </View>
 
-          {/* Emotionaler Kontext: Ersparnis */}
+          {/* 1. ANCHORING (Preis-Anker ganz nach oben) */}
+          <View style={{ paddingHorizontal: SPACING.l, marginBottom: 24 }}>
+            <View style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              borderRadius: RADIUS.l,
+              padding: SPACING.m,
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.08)',
+              alignItems: 'center'
+            }}>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: PALETTE.dark.textMuted, textAlign: 'center', marginBottom: 16 }}>
+                Ein ganzes Jahr Freiheit kostet weniger als:
+              </Text>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16 }}>
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <Ionicons name="cube" size={28} color={PALETTE.dark.error} style={{ marginBottom: 4 }} />
+                  <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 18 }}>~{packsEquivalent}</Text>
+                  <Text style={{ fontSize: 11, color: PALETTE.dark.textSecondary, textAlign: 'center' }}>Schachteln Zigaretten</Text>
+                </View>
+
+                <View style={{ width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <Ionicons name="heart-circle" size={32} color={PALETTE.dark.success} style={{ marginBottom: 4 }} />
+                  <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 18 }}>Für Immer</Text>
+                  <Text style={{ fontSize: 11, color: PALETTE.dark.textSecondary, textAlign: 'center' }}>Dein neues Leben</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* 2. LOSS AVERSION (Was verlierst du aktuell?) */}
           <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
             <View style={{
-              backgroundColor: 'rgba(16, 185, 129, 0.05)',
+              backgroundColor: 'rgba(16, 185, 129, 0.08)',
               borderRadius: RADIUS.l,
               padding: SPACING.l,
               borderWidth: 1,
-              borderColor: 'rgba(16, 185, 129, 0.2)',
+              borderColor: 'rgba(16, 185, 129, 0.3)',
               alignItems: 'center',
-              overflow: 'hidden' // Important for contained glow
+              overflow: 'hidden'
             }}>
               <View style={{ position: 'absolute', top: -50, right: -50, width: 150, height: 150, backgroundColor: PALETTE.dark.success, opacity: 0.1, borderRadius: 75 }} />
+              <View style={{ position: 'absolute', bottom: -30, left: -30, width: 100, height: 100, backgroundColor: PALETTE.dark.primary, opacity: 0.1, borderRadius: 50 }} />
 
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: PALETTE.dark.textSecondary, textAlign: 'center', marginBottom: 4 }}>
-                Dein Gewinn <Text style={{ color: '#FFF', fontFamily: 'Inter_700Bold' }}>NUR</Text> im ersten Jahr
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: PALETTE.dark.primary, textAlign: 'center', marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                Dein Gewinn im ersten Jahr
               </Text>
 
-              <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 42, color: PALETTE.dark.success, marginVertical: 4 }}>
+              <Text style={{ fontFamily: 'Poppins_700Bold', fontSize: 46, color: '#FFF', marginVertical: 4 }}>
                 {oneYearSavings.toLocaleString('de-DE')}€
               </Text>
 
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: PALETTE.dark.textSecondary, marginTop: 4, textAlign: 'center' }}>
-                Investiere in deine Träume, nicht in Rauch.
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: PALETTE.dark.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                Das verdampfst du aktuell Jahr für Jahr.
               </Text>
             </View>
           </View>
 
-          {/* Preis-Anker: App Kosten vs Zigaretten */}
+          {/* Feature List (Kurz & Prägnant) */}
           <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: PALETTE.dark.textMuted, textAlign: 'center', marginBottom: 16 }}>
-              Die App kostet dich im Jahr weniger als:
-            </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20 }}>
-              <View style={{ alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, minWidth: 100 }}>
-                <Ionicons name="cube" size={24} color={PALETTE.dark.error} style={{ marginBottom: 4 }} />
-                <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 16 }}>~{packsEquivalent}</Text>
-                <Text style={{ fontSize: 10, color: PALETTE.dark.textSecondary }}>Schachteln</Text>
-              </View>
-              <Text style={{ color: PALETTE.dark.textMuted, fontFamily: 'Inter_600SemiBold' }}>vs.</Text>
-              <View style={{ alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.05)', padding: 12, borderRadius: 16, minWidth: 100, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.2)' }}>
-                <Ionicons name="heart-circle" size={28} color={PALETTE.dark.primary} style={{ marginBottom: 0 }} />
-                <Text style={{ fontFamily: 'Poppins_700Bold', color: '#FFF', fontSize: 16 }}>Freiheit</Text>
-                <Text style={{ fontSize: 10, color: PALETTE.dark.textSecondary }}>Für immer</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Feature List */}
-          <View style={{ paddingHorizontal: SPACING.l, marginBottom: 30 }}>
-            <FeatureRow text="Exakter Ersparnis- & Zeit-Rechner" />
-            <FeatureRow text="Lückenloses Erfolgs-Tracking" />
-            <FeatureRow text="Motivierende Statistik-Übersicht" />
-            <FeatureRow text="Gesundheits-Fortschritt Visualisierung" />
+            <FeatureRow text="Personalistierter Ausstiegsplan" />
+            <FeatureRow text="Gesundheits- & Finanz-Tracking" />
+            <FeatureRow text="Tägliche Motivation & Statistik" />
           </View>
 
           {/* Pricing Options */}
@@ -851,18 +863,24 @@ export default function OnboardingScreen() {
                 <PlanOption
                   title="Jahres-Mitgliedschaft"
                   price={`${yearlyPriceStr} / Jahr`}
-                  subtext="Das beste Angebot für deinen Erfolg"
-                  badge="BELIEBTESTE WAHL"
-                  sticker="BELIEBT"
+                  originalPrice={undefined}
+                  subtext={`Das entspricht nur ~${(yearlyPriceNum / 12).toFixed(2).replace('.', ',')}€ im Monat.`}
+                  badge="SMARTE WAHL"
+                  badgeColor={PALETTE.dark.primary}
+                  sticker="ZURÜCKGEWINNEN"
                   selected={selectedPlan === 'yearly'}
                   onPress={() => setSelectedPlan('yearly')}
                 />
+
+                {/* RISK REVERSAL: Free Trial massiv hervorheben */}
                 <PlanOption
-                  title="Wöchentlich"
-                  price={`${weeklyPriceStr} / Woche`}
-                  subtext={weeklyHasTrial ? "Volle Flexibilität. 3 Tage kostenlos testen." : "Volle Flexibilität. Jederzeit kündbar."}
-                  badge={weeklyHasTrial ? "3 TAGE GRATIS" : "FLEXIBEL"}
-                  badgeColor={PALETTE.dark.success}
+                  title={weeklyHasTrial ? "Teste 3 Tage Komplett Gratis" : "Wöchentlich kündbar"}
+                  price={weeklyHasTrial ? "0,00 € für 3 Tage" : `${weeklyPriceStr} / Woche`}
+                  originalPrice={undefined}
+                  subtext={weeklyHasTrial ? `Danach ${weeklyPriceStr} / Woche. Jederzeit kündbar.` : "Volle Flexibilität. Jederzeit kündbar."}
+                  badge={weeklyHasTrial ? "RISIKOFREI" : "FLEXIBEL"}
+                  badgeColor={weeklyHasTrial ? PALETTE.dark.success : PALETTE.dark.primary}
+                  sticker={undefined}
                   selected={selectedPlan === 'weekly'}
                   onPress={() => setSelectedPlan('weekly')}
                 />
@@ -872,38 +890,28 @@ export default function OnboardingScreen() {
 
           {/* Footer Action */}
           <View style={{ paddingHorizontal: SPACING.l, marginBottom: 20 }}>
-            <View style={{ alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ color: PALETTE.dark.textSecondary, fontSize: 12, marginBottom: 4 }}>
-                {selectedPlan === 'yearly'
-                  ? `${yearlyPriceStr} / Jahr. Sofortiger Zugriff.`
-                  : `${weeklyPriceStr} / Woche nach 3 kostenlosen Test-Tagen.`}
-              </Text>
-            </View>
-
             <TouchableOpacity onPress={handlePurchase} activeOpacity={0.9} disabled={isPurchasing || isLoadingPrice}>
               <LinearGradient
-                colors={[PALETTE.dark.primary, '#2DD4BF']}
+                colors={selectedPlan === 'yearly' ? [PALETTE.dark.primary, '#2DD4BF'] : [PALETTE.dark.success, '#10B981']}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={{
                   borderRadius: RADIUS.full,
-                  paddingVertical: 16,
+                  paddingVertical: 18,
                   alignItems: 'center',
-                  shadowColor: PALETTE.dark.primary,
+                  shadowColor: selectedPlan === 'yearly' ? PALETTE.dark.primary : PALETTE.dark.success,
                   shadowOpacity: 0.4,
                   shadowRadius: 20,
                   shadowOffset: { width: 0, height: 8 },
-                  opacity: (isPurchasing || isLoadingPrice) ? 0.7 : 1
+                  opacity: (isPurchasing || isLoadingPrice) ? 0.7 : 1,
+                  marginBottom: 12
                 }}
               >
                 {isPurchasing ? (
                   <ActivityIndicator color="#121217" />
                 ) : (
                   <>
-                    <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 17, color: '#121217' }}>
-                      {selectedPlan === 'yearly' ? "Rauchfreies Leben starten" : (weeklyHasTrial ? "Jetzt 3 Tage gratis testen" : "Jetzt starten")}
-                    </Text>
-                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: 'rgba(0,0,0,0.6)', marginTop: 2 }}>
-                      {selectedPlan === 'yearly' ? 'Spare langfristig maximal' : 'Jederzeit kündbar in den Einstellungen'}
+                    <Text style={{ fontFamily: 'Poppins_600SemiBold', fontSize: 17, color: '#121217', textAlign: 'center' }}>
+                      {selectedPlan === 'yearly' ? "Jetzt Freiheit sichern" : (weeklyHasTrial ? "Kostenlosen Test starten" : "Jetzt Freiheit sichern")}
                     </Text>
                   </>
                 )}
